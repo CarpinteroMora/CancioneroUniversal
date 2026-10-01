@@ -95,6 +95,17 @@ async function fileHandleAt(dir, parts) {
   }
 }
 
+async function dirHandleAt(dir, parts) {
+  if (!dir || !parts) return null;
+  try {
+    let h = dir;
+    for (const p of parts) h = await h.getDirectoryHandle(p);
+    return h;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function resolveIn(dir, handle) {
   try { return dir && handle ? await dir.resolve(handle) : null; } catch (_) { return null; }
 }
@@ -130,76 +141,11 @@ async function songsFolder() {
     title: '¿Dónde guardamos tus canciones?',
     body: `<p>Elige la carpeta <b>${SONGS_FOLDER}</b> dentro de <b>Música</b>.
         Si eliges Música, Cancionero Universal usa (o crea) <b>Música/${SONGS_FOLDER}</b>.</p>
-      <p class="hint">Solo se pregunta esta vez: desde ahora Guardar y Abrir empiezan siempre en esa carpeta.</p>`,
+      <p class="hint">Solo se pregunta esta vez: desde ahora Guardar y Abrir empiezan siempre en esa carpeta.
+        Puedes cambiarla en <b>Archivo → Abrir colección</b>.</p>`,
     buttons: [{ label: 'Cancelar' }, { label: 'Elegir carpeta', primary: true, value: 'pick' }]
   });
   return go ? pickSongsFolder() : null;
-}
-
-async function songsFolderDialog() {
-  if (!canPickFiles) {
-    toast('Este navegador guarda en la carpeta de Descargas. Para elegir carpeta usa Chrome o Edge.', 5000);
-    return;
-  }
-  const dir = await savedSongsFolder();
-  const change = await showModal({
-    title: 'Carpeta de canciones',
-    body: dir
-      ? `<p>Tus canciones se guardan en la carpeta <b>${escapeHtml(dir.name)}</b>.</p>
-         <p class="hint">Guardar y Abrir empiezan siempre en esa carpeta.</p>`
-      : `<p>Todavía no elegiste carpeta. Te recomendamos <b>Música/${SONGS_FOLDER}</b>.</p>`,
-    buttons: [{ label: 'Cerrar' }, { label: dir ? 'Cambiar carpeta…' : 'Elegir carpeta…', primary: true, value: 'pick' }]
-  });
-  if (change) pickSongsFolder();
-}
-
-// ============ CARPETA PARA EXPORTAR ============
-// Solo sirve para que el diálogo «Guardar como» empiece ahí: igual se pregunta siempre.
-async function exportFolderPath() {
-  if (!extractorAllowed()) return '';
-  try {
-    const r = await fetch(`${extractorBase()}/api/carpeta-exportar`, { cache: 'no-store' });
-    return r.ok ? (await r.json()).ruta || '' : '';
-  } catch (_) {
-    return '';
-  }
-}
-
-async function pickExportFolder() {
-  let dir;
-  try {
-    dir = await window.showDirectoryPicker({ id: 'cancionero-universal', mode: 'readwrite', startIn: (await handleGet('exportar')) || 'desktop' });
-  } catch (e) {
-    if (e.name !== 'AbortError') toast('No se pudo usar esa carpeta');
-    return null;
-  }
-  // Si eligió el Escritorio, se usa (o se crea) Escritorio/Cancionero Universal
-  if (/^(escritorio|desktop)$/i.test(dir.name)) dir = await dir.getDirectoryHandle(EXPORT_FOLDER, { create: true });
-  await handleSet('exportar', dir);
-  localStorage.setItem('canciotras-exportado', '1');
-  toast(`Al exportar, el diálogo empezará en la carpeta "${dir.name}"`, 3500);
-  return dir;
-}
-
-async function exportFolderDialog() {
-  if (!canPickFiles) {
-    toast(isMobileDevice()
-      ? 'En el celular lo exportado queda en Descargas, y al terminar puedes compartirlo (WhatsApp, Drive…).'
-      : 'Este navegador guarda en la carpeta de Descargas. Para elegir carpeta usa Chrome o Edge.', 6000);
-    return;
-  }
-  const [dir, ruta] = await Promise.all([handleGet('exportar'), exportFolderPath()]);
-  const change = await showModal({
-    title: 'Carpeta para exportar',
-    body: `<p>${dir
-      ? `Al exportar (proyectar, Word, página web…), el diálogo «Guardar como» empieza en la carpeta <b>${escapeHtml(dir.name)}</b>.`
-      : `Te recomendamos la carpeta <b>${EXPORT_FOLDER}</b> de tu Escritorio.`}</p>
-      ${ruta ? `<p class="hint">Ya está creada en: <b>${escapeHtml(ruta)}</b></p>` : ''}
-      <p class="hint">Igual se pregunta siempre dónde guardar cada archivo; esto solo elige dónde empieza.
-        Si eliges el Escritorio, se usa (o se crea) la carpeta «${EXPORT_FOLDER}».</p>`,
-    buttons: [{ label: 'Cerrar' }, { label: dir ? 'Cambiar carpeta…' : 'Elegir carpeta…', primary: true, value: 'pick' }]
-  });
-  if (change) pickExportFolder();
 }
 
 // ============ ARCHIVO DE CADA PESTAÑA ============
@@ -382,14 +328,17 @@ async function uniqueFileName(dir, base, ext) {
 }
 
 // Deja la canción de la pestaña guardada como .md dentro de la carpeta de canciones, sin
-// preguntar (para el cancionero). Devuelve las partes de su ruta dentro de la carpeta.
-async function ensureSongFile(d, dir) {
+// preguntar (para el cancionero): con cambios se escribe en su archivo; si aún no tiene, se crea
+// en `folderParts` (subcarpeta de la carpeta de canciones). Devuelve las partes de su ruta.
+async function ensureSongFile(d, dir, folderParts = []) {
   let handle = await docFileHandle(d);
-  let parts = handle && await permissionOk(handle, false, 'readwrite') ? await resolveIn(dir, handle) : null;
+  let parts = await resolveIn(dir, handle);
   if (!parts) {
-    const name = await uniqueFileName(dir, safeFileName(d.title.trim() || 'Sin título'), '.md');
-    handle = await dir.getFileHandle(name, { create: true });
-    parts = [name];
+    const sub = folderParts.length ? await dirHandleAt(dir, folderParts) : null;
+    const folder = sub || dir;
+    const name = await uniqueFileName(folder, safeFileName(d.title.trim() || 'Sin título'), '.md');
+    handle = await folder.getFileHandle(name, { create: true });
+    parts = [...(sub ? folderParts : []), name];
     await writeText(handle, await markdownFor(d, handle));
     rememberFileHandle(d, handle);
     markClean(d);
@@ -398,6 +347,61 @@ async function ensureSongFile(d, dir) {
     markClean(d);
   }
   return parts;
+}
+
+// Guarda las canciones con cambios en su archivo; las que aún no tienen, en `folderParts`
+async function saveChangedSongs(folderParts = []) {
+  syncFromEditor();
+  const changed = docs.filter(d => !isBlank(d) && isDirty(d));
+  if (!changed.length) return true;
+  if (!canPickFiles) return downloadSongs(changed);
+  const dir = await songsFolder();
+  if (!dir || !await hasPermission(dir)) return false;
+  try {
+    for (const d of changed) {
+      const h = await docFileHandle(d);
+      if (h && !await resolveIn(dir, h) && await hasPermission(h)) {
+        await writeText(h, await markdownFor(d, h));
+        markClean(d);
+      } else {
+        await ensureSongFile(d, dir, folderParts);
+      }
+    }
+  } catch (e) {
+    toast('No se pudo guardar: ' + e.message, 5000);
+    return false;
+  }
+  refresh();
+  toast(changed.length === 1 ? `Guardada "${changed[0].title.trim() || 'Sin título'}"` : `${changed.length} canciones guardadas`, 2500);
+  return true;
+}
+
+// Sin acceso a carpetas: una canción se descarga como .md; varias (y la lista, si va), en un .zip
+async function downloadSongs(songs, book = null) {
+  const names = new Map(), used = new Set();
+  for (const d of songs) {
+    const base = safeFileName(d.title.trim() || 'Sin título');
+    let name = base + '.md';
+    for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base} (${i}).md`;
+    used.add(name.toLowerCase());
+    names.set(d, name);
+  }
+  const entries = songs.map(d => ({ name: names.get(d), data: buildMarkdown(d) }));
+  if (book) {
+    for (const d of docs) for (const a of d.audios) a.path = m3uAudioPath(a, a.src.replace(/^\.\//, ''));
+    try {
+      entries.unshift({ name: safeFileName(book) + '.m3u8', data: await buildM3u8(book, async d => names.get(d)) });
+    } finally {
+      for (const d of docs) for (const a of d.audios) delete a.path;
+    }
+  }
+  const ok = entries.length === 1
+    ? await saveFile(entries[0].data, entries[0].name, 'text/markdown', '.md', 'Canción')
+    : await saveFile(makeZip(entries), safeFileName(book || 'Canciones') + '.zip', 'application/zip', '.zip', 'Canciones (ZIP)');
+  if (!ok) return false;
+  songs.forEach(d => markClean(d));
+  refresh();
+  return true;
 }
 
 // Abrir: empieza en la carpeta de canciones; lo abierto se guarda luego en el mismo archivo

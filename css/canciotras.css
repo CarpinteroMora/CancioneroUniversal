@@ -41,6 +41,15 @@ body.has-audio { --audio-h: 64px; padding-bottom: var(--audio-h); }
   background: transparent;
 }
 .doc-title:hover, .doc-title:focus { border-color: #dadce0; background: white; }
+.book-name {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 1; min-width: 0; max-width: 260px;
+  border: 1px solid #d2e3fc; background: #e8f0fe; color: #174ea6; border-radius: 14px;
+  padding: 3px 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.book-name:hover { background: #d2e3fc; }
+.book-label { overflow: hidden; text-overflow: ellipsis; }
+.book-name.unsaved { border-style: dashed; background: #fff; color: #5f6368; }
+.book-name.dirty::after { content: '●'; color: #e37400; font-size: 11px; }
 
 /* ============ MENÚ ============ */
 .menubar { display: flex; flex-wrap: wrap; gap: 2px; margin: 2px 0 4px; user-select: none; }
@@ -500,6 +509,8 @@ body.mode-atril .atril-controls { display: flex; }
 .install-cmd { display: flex; gap: 8px; align-items: center; background: #202124; border-radius: 8px; padding: 8px 8px 8px 12px; }
 .install-cmd code { flex: 1; color: #e8eaed; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
 .install-other { font-size: 13px; color: #5f6368; }
+.install-skip { margin-top: 10px; font-size: 13px; text-align: right; }
+.install-skip a { color: #5f6368; }
 .install-status { padding: 8px 12px; background: #f1f3f4; border-radius: 8px; }
 .install-spin {
   display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
@@ -508,6 +519,32 @@ body.mode-atril .atril-controls { display: flex; }
 @keyframes install-spin { to { transform: rotate(360deg); } }
 .audio-bar.page-mode audio, .audio-bar.page-mode .speed { display: none; }
 .audio-bar.page-mode { justify-content: center; }
+.audio-bar.yt-mode audio { display: none; }
+.audio-bar.yt-mode { justify-content: center; }
+.audio-bar.yt-mode .page-btn { min-width: 170px; }
+
+/* YouTube dentro de la app (mini ventana; YouTube pide al menos 200x200 px visibles) */
+.yt-mini {
+  position: fixed; z-index: 1200; left: 0; top: 0;
+  width: 200px; background: #0f0f0f; border-radius: 10px; overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+.yt-mini.big { width: min(480px, calc(100vw - 16px)); }
+.yt-mini.dragging { opacity: .85; }
+.yt-mini-bar {
+  display: flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px;
+  color: #e8eaed; font-size: 12px; cursor: grab; touch-action: none; user-select: none;
+}
+.yt-mini.dragging .yt-mini-bar { cursor: grabbing; }
+.yt-mini-grip { flex: 1; white-space: nowrap; }
+.yt-mini-bar button {
+  border: none; background: none; color: #e8eaed; cursor: pointer;
+  width: 34px; height: 30px; border-radius: 6px; font-size: 16px; line-height: 1;
+}
+.yt-mini-bar button:active, .yt-mini-bar button:hover { background: rgba(255,255,255,.15); }
+.yt-mini-video { width: 200px; height: 200px; }
+.yt-mini.big .yt-mini-video { width: 100%; height: auto; aspect-ratio: 16 / 9; min-height: 200px; }
+.yt-mini-video iframe { display: block; width: 100%; height: 100%; border: 0; }
 .pick-row { display: flex; align-items: center; gap: 10px; }
 .speed { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .speed button { border: none; background: none; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 6px; }
@@ -684,6 +721,60 @@ body.pv-open { overflow: hidden; }
   .pv-side { max-height: 45vh; }
 }
 
+/* ============ COLECCIÓN (canciones, audios y videos de las carpetas) ============ */
+.book-picker {
+  position: fixed; z-index: 1350; right: 16px;
+  top: calc(var(--chrome-h, 170px) + 8px);
+  bottom: calc(var(--audio-h) + 16px);
+  width: min(420px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 8px;
+  background: white; border-radius: 12px; padding: 12px 14px;
+  box-shadow: 0 6px 28px rgba(0,0,0,.25);
+  font-family: Arial, sans-serif; font-size: 14px;
+}
+.book-picker.drop-over { box-shadow: 0 0 0 3px #1a73e8, 0 6px 28px rgba(0,0,0,.25); }
+.bp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; font-size: 16px; }
+.bp-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.book-picker .bp-search { flex: none; }
+.book-picker > * { flex-shrink: 0; }
+.bp-tags { margin: 0; max-height: 92px; overflow-y: auto; }
+.book-picker .bp-list { flex: 1 1 auto; flex-shrink: 1; }
+.bp-list { flex: 1; min-height: 80px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; overscroll-behavior: contain; }
+.bp-row {
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start;
+  padding: 8px 10px; border-bottom: 1px solid #f1f3f4; cursor: pointer;
+}
+.bp-row:hover { background: #f8f9fa; }
+.bp-row input { width: 20px; height: 20px; margin-top: 1px; accent-color: #1a73e8; }
+.bp-row:has(input:checked) { background: #e8f0fe; }
+.bp-title { display: flex; flex-direction: column; min-width: 0; }
+.bp-title small { color: #80868b; font-size: 11px; overflow-wrap: anywhere; }
+.bp-chips { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.bp-chips .tag-chip { font-size: 11px; padding: 0 7px; }
+.bp-empty { padding: 20px 12px; text-align: center; }
+.bp-drop {
+  border: 2px dashed #bdc1c6; border-radius: 8px; padding: 8px; text-align: center;
+  color: #5f6368; font-size: 12px;
+}
+.book-picker.drop-over .bp-drop { border-color: #1a73e8; background: #e8f0fe; color: #1a73e8; }
+.cl-folders { width: 100%; font-size: 13px; }
+.cl-folders[open] { max-height: 30vh; overflow-y: auto; }
+.cl-folders > summary { cursor: pointer; color: #3c4043; font-weight: bold; padding: 2px 0; }
+.cl-folder { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px solid #f1f3f4; }
+.cl-folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-folder small { color: #80868b; white-space: nowrap; }
+.cl-folder.locked .cl-folder-name { color: #80868b; }
+.cl-folder .cl-main { color: #188038; }
+.cl-remove { border: none; background: none; color: #80868b; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+.cl-remove:hover { color: #d93025; }
+.cl-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.cl-kinds { margin: 0; }
+.cl-tag-btn { border: none; background: none; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .6; }
+.cl-tag-btn:hover { opacity: 1; }
+.bp-foot { display: flex; align-items: center; gap: 8px; }
+.bp-count { flex: 1; font-size: 13px; color: #5f6368; }
+@media (pointer: coarse) { .bp-drop { display: none; } }
+
 /* ============ TELÉFONO Y TABLET ============ */
 /* Piezas que solo aparecen en pantallas chicas */
 .menu-toggle, .key-toggle, .key-sheet-head, .banner-more, .fit-btn { display: none; }
@@ -763,6 +854,8 @@ body.pv-open { overflow: hidden; }
   }
   .menu-toggle:active { background: #e8eaed; }
   .doc-title { font-size: 16px; max-width: none; padding: 6px 8px; }
+  .book-name { max-width: 34vw; padding: 5px 8px; }
+  .book-icon { display: none; }
 
   .toolbar {
     flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
@@ -841,7 +934,7 @@ body.pv-open { overflow: hidden; }
   .audio-bar { gap: 4px; padding: 0 6px env(safe-area-inset-bottom); }
   .audio-bar audio { height: 40px; }
   .audio-bar select { max-width: 28vw; }
-  .speed input, #speedDown, #speedUp { display: none; }
+  .speed input { display: none; }
   .speed .speed-label { min-width: 40px; }
   .page-btn { padding: 9px 14px; font-size: 14px; }
 
@@ -868,6 +961,14 @@ body.pv-open { overflow: hidden; }
   .inst-row b { min-width: 0; flex-basis: 100%; }
   .about-path { max-width: 220px; }
   .toast { bottom: calc(var(--atril-h) + var(--audio-h) + 16px); }
+
+  .book-picker {
+    left: 0; right: 0; top: auto; bottom: 0; width: 100%;
+    max-height: 75vh; max-height: 75dvh; height: 75dvh;
+    border-radius: 16px 16px 0 0; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .bp-search { font-size: 16px; }
+  .bp-foot .btn { min-height: 42px; }
 }
 
 /* Panel de acordes como hoja inferior cuando no cabe al costado */
@@ -927,7 +1028,7 @@ body.pv-open { overflow: hidden; }
 .print-all { display: none; }
 @media print {
   .chrome, .info-banner, .audio-bar, .atril-controls, .toast, #editorPane, .side-panel, .sheet-bar, .sheet-note,
-  .drawer, .sheet-backdrop, .install-hint, .key-sheet { display: none !important; }
+  .drawer, .sheet-backdrop, .install-hint, .key-sheet, .yt-mini, .book-picker { display: none !important; }
   .strum-line svg { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { background: white; padding: 0 !important; }
   .doc-area { padding: 0; }

@@ -79,20 +79,25 @@ function applySpeed() {
   label.textContent = speedText(v);
   label.classList.toggle('slow', v < 1);
   label.classList.toggle('fast', v > 1);
+  ytApplySpeed();
 }
+
+// YouTube solo acepta velocidades de a 0,25
+const ytSpeedMode = () => $('#audioBar').classList.contains('yt-mode');
+const speedStep = () => ytSpeedMode() ? 0.25 : 0.05;
 
 function setSpeed(v) {
   const a = currentAudio();
   if (!a) return;
-  v = clampSpeed(v);
+  v = clampSpeed(ytSpeedMode() ? Math.round(v * 4) / 4 : v);
   if (v === 1) delete a.speed; else a.speed = v;
   applySpeed();
   scheduleSave();
 }
 
 $('#speedRange').addEventListener('input', e => setSpeed(e.target.value));
-$('#speedDown').addEventListener('click', () => setSpeed((currentAudio()?.speed || 1) - 0.05));
-$('#speedUp').addEventListener('click', () => setSpeed((currentAudio()?.speed || 1) + 0.05));
+$('#speedDown').addEventListener('click', () => setSpeed((currentAudio()?.speed || 1) - speedStep()));
+$('#speedUp').addEventListener('click', () => setSpeed((currentAudio()?.speed || 1) + speedStep()));
 $('#speedLabel').addEventListener('click', () => setSpeed(1));
 document.querySelectorAll('.speed button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
 $('#audioPlayer').addEventListener('loadedmetadata', applySpeed);
@@ -141,6 +146,7 @@ function updateAudioBar() {
   const d = cur();
   const bar = $('#audioBar'), sel = $('#audioSelect'), player = $('#audioPlayer');
   if (!d || !d.audios.length) {
+    ytSync(null);
     bar.hidden = true;
     document.body.classList.remove('has-audio');
     if (player.dataset.src) {
@@ -164,11 +170,23 @@ function updateAudioBar() {
     refreshExtractorOnline().then(ok => ok !== before && updateAudioBar());
   }
   const pageMode = viaPage && !serverReady();
-  bar.classList.toggle('page-mode', pageMode);
+  // Sin servidor: en el celular YouTube suena en la mini ventana; en el PC se instala el servidor
+  const embed = pageMode && youtubeEmbedOk(a);
+  bar.classList.toggle('page-mode', pageMode && !embed);
+  bar.classList.toggle('yt-mode', embed);
+  $('#speedRange').step = embed ? 0.25 : 0.05;
   $('#pageBtn').hidden = !pageMode;
-  $('#installBtn').hidden = !pageMode || isMobileDevice();
+  $('#installBtn').hidden = true;
+  ytSync(embed ? a : null);
   if (pageMode) {
-    $('#pageBtn').textContent = `▶ Escuchar en ${normalizeMediaUrl(audioPage(a)).streaming || 'su página'}`;
+    if (embed) {
+      ytUpdateButton();
+      applySpeed();
+    } else {
+      $('#pageBtn').textContent = isMobileDevice()
+        ? `▶ Escuchar en ${normalizeMediaUrl(audioPage(a)).streaming || 'su página'}`
+        : '▶ Reproducir aquí';
+    }
     if (player.dataset.src) {
       player.dataset.src = '';
       player.removeAttribute('src');
@@ -198,7 +216,12 @@ $('#audioPlayer').addEventListener('playing', () => {
 
 const reloadAudio = () => { $('#audioPlayer').dataset.src = ''; updateAudioBar(); };
 
-$('#pageBtn').addEventListener('click', () => openAudioPage(currentAudio()));
+$('#pageBtn').addEventListener('click', () => {
+  const a = currentAudio();
+  if ($('#audioBar').classList.contains('yt-mode')) ytToggle(a);
+  else if (isMobileDevice()) openAudioPage(a);
+  else showLocalInstall();
+});
 $('#installBtn').addEventListener('click', () => showLocalInstall());
 
 $('#audioPlayer').addEventListener('error', async () => {
@@ -429,10 +452,13 @@ document.addEventListener('drop', async e => {
   const found = await Promise.all(handles);
   const handleFor = f => found.find(h => h?.kind === 'file' && h.name === f.name) || null;
   const media = files.filter(isMediaFile), sheets = files.filter(isSheetFile);
-  if (!media.length && !sheets.length) {
-    toast('Arrastra audios, videos, partituras (imagen, PDF, MusicXML) o tablaturas (Guitar Pro)', 4000);
+  const songs = files.filter(f => !media.includes(f) && !sheets.includes(f) && /\.(md|markdown|txt|cho|crd|chopro|chordpro|pro|m3u8?)$/i.test(f.name));
+  if (!media.length && !sheets.length && !songs.length) {
+    toast('Arrastra canciones (.md), audios, videos, partituras (imagen, PDF, MusicXML) o tablaturas (Guitar Pro)', 4000);
     return;
   }
+  // Canciones: cada una en su pestaña, vinculada a su archivo para poder guardarla ahí mismo
+  if (songs.length) await openFiles(songs.map(f => ({ file: f, handle: handleFor(f) })));
   for (const f of media) await attachLocalFile(f, { handle: handleFor(f), voice: state.highlight === 'todas' ? 'todas' : state.highlight });
   for (const f of sheets) await addSheetFromFile(f, handleFor(f));
 });

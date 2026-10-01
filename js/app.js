@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.0.0',
+  version: '4.1.0',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -25,7 +25,9 @@ const state = {
   fontSize: 15,
   highlight: 'todas',
   bannerHidden: false,
-  cancioneroName: 'Mi cancionero',
+  cancioneroName: '',
+  cancioneroPath: '',
+  cancioneroClean: null,
   scrollSpeed: 5,
   showPanel: false
 };
@@ -46,7 +48,8 @@ function refresh() {
   renderPanel();
   renderTabs();
   showScrollSpeed();
-  document.title = `${d.title.trim() || 'Sin título'} – ${APP_INFO.nombre}`;
+  renderBookName();
+  document.title = `${d.title.trim() || 'Sin título'}${state.cancioneroName ? ' · ' + state.cancioneroName : ''} – ${APP_INFO.nombre}`;
   autosize();
   scheduleSave();
 }
@@ -414,18 +417,20 @@ function showSyntax() {
 // ============ MENÚ ============
 const MENUS = [
   { label: 'Archivo', items: [
+    { label: 'Nuevo cancionero…', action: 'newBook' },
     { label: 'Nueva pestaña', action: 'new', key: 'Ctrl+Alt+N' },
+    { label: 'Abrir colección…', action: 'openCollection', key: 'Ctrl+Alt+O' },
+    { sep: true },
     { label: 'Abrir…', action: 'open', key: 'Ctrl+O' },
     { label: 'Guardar', action: 'save', key: 'Ctrl+S' },
     { label: 'Guardar como…', action: 'saveAs', key: 'Ctrl+Shift+S' },
-    { label: 'Carpeta de canciones…', action: 'songsFolder' },
-    { label: 'Carpeta para exportar…', action: 'exportFolder' },
     { sep: true },
     { label: 'Importar en esta canción…', action: 'import' },
     { label: 'Cerrar pestaña', action: 'closeTab', key: 'Ctrl+Alt+W' },
     { sep: true },
     { group: 'Cancionero (todas las pestañas)' },
-    { label: 'Guardar cancionero (.m3u8)…', action: 'saveBook', key: 'Ctrl+Alt+S' },
+    { label: 'Guardar cancionero (.m3u8)', action: 'saveBook', key: 'Ctrl+Alt+S' },
+    { label: 'Guardar cancionero como…', action: 'saveBookAs' },
     { label: 'Abrir cancionero…', action: 'openBook' },
     { label: 'Imprimir cancionero…', action: 'printBook' },
     { label: 'Tríptico para la asamblea (solo letra)…', action: 'printTriptych' },
@@ -539,11 +544,13 @@ const ACTIONS = {
   open: openSongs,
   save: () => saveSong(false),
   saveAs: () => saveSong(true),
-  songsFolder: songsFolderDialog,
   import: () => $('#fileImport').click(),
   closeTab: () => closeTab(),
-  saveBook: saveCancioneroDialog,
+  saveBook: () => saveCancioneroDialog(),
+  saveBookAs: () => saveCancioneroDialog(true),
   openBook: openSongs,
+  newBook: newBookDialog,
+  openCollection,
   relinkAudios: activateFolderAudios,
   printBook: () => openPrintPreview('cancionero'),
   printTriptych: () => openPrintPreview('triptico'),
@@ -557,7 +564,6 @@ const ACTIONS = {
   exportOdt: () => exportSongDoc('odt'),
   exportBookDocx: () => exportBookDoc('docx'),
   exportBookOdt: () => exportBookDoc('odt'),
-  exportFolder: exportFolderDialog,
   print: () => openPrintPreview('cancion'),
   example: loadExample,
 
@@ -644,7 +650,7 @@ document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   let act = null;
   if (e.altKey) {
-    act = { KeyN: 'new', KeyW: 'closeTab', KeyM: 'comment', KeyS: 'saveBook', KeyP: 'togglePanel', KeyE: 'tagDialog', ArrowRight: 'nextTab', ArrowLeft: 'prevTab' }[e.code] || null;
+    act = { KeyN: 'new', KeyO: 'openCollection', KeyW: 'closeTab', KeyM: 'comment', KeyS: 'saveBook', KeyP: 'togglePanel', KeyE: 'tagDialog', ArrowRight: 'nextTab', ArrowLeft: 'prevTab' }[e.code] || null;
   } else if (e.shiftKey) {
     act = { z: 'redo', f: 'fullscreen', s: 'saveAs' }[k] || null;
   } else {
@@ -662,6 +668,11 @@ document.addEventListener('keydown', e => {
 
 titleEl.addEventListener('input', scheduleRefresh);
 window.addEventListener('beforeprint', refresh);
+// La sesión queda en el navegador, pero los archivos no: si hay algo sin guardar, el navegador avisa
+window.addEventListener('beforeunload', e => {
+  syncFromEditor();
+  if (docs.some(d => !isBlank(d) && isDirty(d)) || bookDirty()) { e.preventDefault(); e.returnValue = ''; }
+});
 
 // ============ INICIO ============
 function init() {
@@ -674,6 +685,8 @@ function init() {
   }
   applyState();
   activate(activeId);
+  // Sesiones de versiones anteriores: lo abierto cuenta como el cancionero tal como está
+  if (state.cancioneroClean == null) state.cancioneroClean = bookSignature();
   // Primer inicio: se abre el cancionero de ejemplo
   if (!restored) loadExample();
   relinkAll().then(() => refresh());

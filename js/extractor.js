@@ -137,6 +137,8 @@ function installStepHtml(os) {
 async function showLocalInstall(retry) {
   if (!ON_PUBLIC_WEB) return showLocalLauncher(retry);
   let os = detectOS(), waiting = false, ready = false, closed = false;
+  const page = currentAudio() && audioPage(currentAudio());
+  const site = page && (normalizeMediaUrl(page).streaming || 'su página');
   await showModal({
     title: 'Instalar reproducción en local',
     body: `
@@ -148,7 +150,8 @@ async function showLocalInstall(retry) {
       <h3 class="install-title">2. Reproducir</h3>
       <p class="install-status">Cuando termine la instalación se activa el botón <b>Reproducir</b>.</p>
       <p class="hint">Si el navegador pide permiso para acceder a dispositivos de tu red local, pulsa <b>Permitir</b>:
-        así esta página puede usar el reproductor que acabas de instalar.</p>`,
+        así esta página puede usar el reproductor que acabas de instalar.</p>
+      ${page ? `<p class="install-skip"><a href="#" data-skip>Ahora no: abrir en ${escapeHtml(site)}</a></p>` : ''}`,
     buttons: [{ label: 'Cerrar' }, { label: 'Reproducir', primary: true, onClick: () => ready ? 'play' : false }],
     onOpen: dlg => {
       const playBtn = dlg.querySelector('.modal-actions .primary');
@@ -184,6 +187,12 @@ async function showLocalInstall(retry) {
       dlg.querySelector('.modal-body').addEventListener('click', async e => {
         const other = e.target.closest('[data-os]');
         if (other) { e.preventDefault(); os = other.dataset.os; render(); return; }
+        if (e.target.closest('[data-skip]')) {
+          e.preventDefault();
+          window.open(page, '_blank', 'noopener');
+          dlg.close();
+          return;
+        }
         if (e.target.closest('.install-get')) wait();
         if (e.target.closest('.install-copy')) {
           wait();

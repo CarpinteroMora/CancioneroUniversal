@@ -297,13 +297,22 @@ async function scanSongsFolder(dir, parts = [], out = [], depth = 0) {
     }
     if (!/\.(md|markdown)$/i.test(name)) continue;
     try {
-      const head = await (await h.getFile()).slice(0, 4000).text();
-      const fm = head.replace(/\r\n?/g, '\n').match(/^---\n([\s\S]*?)\n---/);
-      const field = k => fm?.[1].match(new RegExp(`^${k}\\s*:\\s*(.*)$`, 'mi'))?.[1].trim().replace(/^"(.*)"$/, '$1') || '';
-      out.push({ handle: h, path: [...parts, name].join('/'), title: field('titulo') || fileBase(name), tags: metaToTags(field('etiquetas')) });
+      out.push({ handle: h, path: [...parts, name].join('/'), ...await songFileHead(await h.getFile()) });
     } catch (_) {}
   }
   return out;
+}
+
+// Título y tags de la cabecera de un .md
+function songHeadText(text, name) {
+  const fm = text.slice(0, 4000).replace(/\r\n?/g, '\n').match(/^---\n([\s\S]*?)\n---/);
+  const field = k => fm?.[1].match(new RegExp(`^${k}\\s*:\\s*(.*)$`, 'mi'))?.[1].trim().replace(/^"(.*)"$/, '$1') || '';
+  return { title: field('titulo') || fileBase(name), tags: metaToTags(field('etiquetas')) };
+}
+
+// Sin leer el archivo entero
+async function songFileHead(file) {
+  return songHeadText(await file.slice(0, 4000).text(), file.name);
 }
 
 function tagSearchDialog() {
@@ -357,7 +366,7 @@ function tagSearchDialog() {
           await openFiles([{ file: await f.handle.getFile(), handle: f.handle }]);
         } else if (e.target.id === 'tsFolder') {
           const dir = await songsDirWithPermission(true, 'read');
-          if (!dir) { toast('Primero elige tu carpeta de canciones (Archivo → Carpeta de canciones…)', 4000); return; }
+          if (!dir) { toast('Primero añade tu carpeta de canciones (Archivo → Abrir colección…)', 4000); return; }
           e.target.disabled = true;
           e.target.textContent = 'Leyendo la carpeta…';
           folder = await scanSongsFolder(dir);

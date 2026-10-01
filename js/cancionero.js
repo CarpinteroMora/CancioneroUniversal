@@ -46,16 +46,56 @@ function parsePairs(s) {
   return out;
 }
 const m3uLine = s => String(s).replace(/[\r\n]+/g, ' ');
+const M3U_TYPES = [{ description: 'Cancionero (lista .m3u8)', accept: { 'audio/x-mpegurl': ['.m3u8'] } }];
+
+// ============ CANCIONERO ACTIVO ============
+// Nombre en state.cancioneroName y ruta para mostrar en state.cancioneroPath. El handle de su
+// .m3u8 (si ya se guardó, o se abrió desde la carpeta de canciones) queda en IndexedDB para que
+// «Guardar cancionero» escriba siempre en el mismo archivo.
+let bookHandle;
+
+async function activeBookHandle() {
+  if (bookHandle === undefined) bookHandle = (await handleGet('cancionero')) || null;
+  return bookHandle;
+}
+
+const bookSongs = () => docs.filter(d => !isBlank(d));
+// Todo lo que se escribe en la lista: si cambia, el cancionero tiene cambios sin guardar
+const bookSignature = () => [state.cancioneroName, ...bookSongs().map(d => [d.id, d.title.trim(), d.scrollSpeed || '',
+  tagsToMeta(d.tags), d.audios.map(a => [a.src, a.name, a.voice, a.speed || ''].join('|')).join(',')].join('\u0001'))].join('\u0000');
+const bookDirty = () => bookSongs().length > 0 && bookSignature() !== state.cancioneroClean;
+
+function setActiveBook(name, handle = null, path = '', clean = true) {
+  state.cancioneroName = name || '';
+  state.cancioneroPath = path || (handle ? handle.name : '');
+  bookHandle = handle;
+  if (handle) handleSet('cancionero', handle); else handleDel('cancionero');
+  syncFromEditor();
+  state.cancioneroClean = clean ? bookSignature() : '';
+  renderBookName();
+  scheduleSave();
+}
+
+function renderBookName() {
+  const b = $('#bookName');
+  const dirty = bookDirty();
+  b.querySelector('.book-label').textContent = state.cancioneroName || 'Cancionero sin nombre';
+  b.classList.toggle('dirty', dirty);
+  b.classList.toggle('unsaved', !state.cancioneroPath);
+  b.title = state.cancioneroPath
+    ? `Cancionero activo: ${state.cancioneroPath}${dirty ? ' (cambios sin guardar)' : ''}. Clic para guardarlo`
+    : 'Cancionero sin guardar todavía: clic para elegir dónde guardarlo';
+}
 
 // ============ GUARDAR ============
-// songParts(d): ruta del .md de la canción (partes) relativa a la lista
-async function buildM3u8(name, songParts) {
+// songPath(d): ruta del .md de la canción relativa a la lista
+async function buildM3u8(name, songPath) {
   syncFromEditor();
   const out = ['#EXTM3U', `#PLAYLIST:${m3uLine(name)}`,
     `${M3U_TAG}:${tagPairs({ version: 2, app: `${APP_INFO.nombre} ${APP_INFO.version}`, notacion: isLatin() ? 'latina' : 'anglosajona', creado: new Date().toISOString() })}`];
   for (const d of docs) {
     if (isBlank(d)) continue;
-    const md = (await songParts(d)).join('/');
+    const md = await songPath(d);
     const title = m3uLine(d.title.trim() || 'Sin título');
     const key = detectKey(d.text);
     const songTags = [`${M3U_TAG}-CANCION:${md}`];
@@ -81,77 +121,180 @@ async function buildM3u8(name, songParts) {
 const m3uAudioPath = (a, localPath) =>
   a.kind === 'local' ? localPath : a.extractor ? extractorListUrl(a.src) : a.src;
 
-// Rutas de los audios relativas a la lista (que queda en la raíz de la carpeta de canciones)
-async function prepareAudioPaths(dir) {
+// Rutas de los audios relativas a la lista (listParts: carpeta de la lista dentro de la de canciones)
+async function prepareAudioPaths(dir, listParts) {
   for (const d of docs) {
     const srcDir = (await docDirParts(d, dir)) || [];
     for (const a of d.audios) {
-      a.path = m3uAudioPath(a, a.kind === 'local' ? await linkedPath('audio:' + a.id, a.src, dir, [], srcDir) : null);
+      a.path = m3uAudioPath(a, a.kind === 'local' ? await linkedPath('audio:' + a.id, a.src, dir, listParts, srcDir) : null);
     }
   }
 }
 
-async function saveCancioneroDialog() {
-  syncFromEditor();
-  const songs = docs.filter(d => !isBlank(d));
-  if (!songs.length) { toast('No hay canciones abiertas para guardar'); return; }
-  let name = '';
-  const ok = await showModal({
+async function askBookName(songs, where) {
+  return showModal({
     title: 'Guardar cancionero',
     body: `
       <p>Se guardarán las <b>${songs.length}</b> canciones abiertas, en el orden de las pestañas.</p>
       <ol class="book-list">${songs.map(d => `<li>${escapeHtml(d.title.trim() || 'Sin título')}</li>`).join('')}</ol>
       <label class="field"><span>Nombre del cancionero</span>
         <input type="text" id="mBook" value="${escapeHtml(state.cancioneroName || 'Mi cancionero')}"></label>
-      <p class="hint">Se guarda como lista <b>.m3u8</b> en tu carpeta de canciones: ocupa muy poco
-        porque solo anota dónde está cada canción y cada audio (se abre también en VLC).
-        Las canciones que aún no tienen archivo se guardan solas como .md en esa carpeta.</p>`,
+      <p class="hint">Se guarda como lista <b>.m3u8</b>: ocupa muy poco porque solo anota dónde está
+        cada canción y cada audio (se abre también en VLC). ${where}</p>`,
     onOpen: d => d.querySelector('#mBook').select(),
     buttons: [
       { label: 'Cancelar' },
       {
-        label: 'Guardar', primary: true,
-        onClick: d => {
-          const v = d.querySelector('#mBook').value.trim();
-          if (!v) return modalFail(d, 'Escribe un nombre para el cancionero.');
-          name = safeFileName(v);
-          return true;
-        }
+        label: canPickFiles ? 'Elegir dónde guardar…' : 'Guardar', primary: true,
+        onClick: d => d.querySelector('#mBook').value.trim() || modalFail(d, 'Escribe un nombre para el cancionero.')
       }
     ]
   });
-  if (!ok) return;
-  state.cancioneroName = name;
+}
+
+// Pide nombre y lugar del .m3u8; el diálogo empieza en `startParts` (dentro de la carpeta de canciones),
+// y la lista tiene que quedar dentro de esa carpeta para poder anotar rutas relativas.
+async function pickBookFile(dir, songs, startParts) {
+  const folderName = [dir.name, ...startParts].join('/');
+  let name = await askBookName(songs, `Te sugerimos guardarla en la carpeta <b>${escapeHtml(folderName)}</b>;
+    las canciones que aún no tienen archivo se guardan como .md junto a ella.`);
+  if (!name) return null;
+  const startIn = (await dirHandleAt(dir, startParts)) || dir;
+  for (;;) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({ startIn, suggestedName: safeFileName(name) + '.m3u8', types: M3U_TYPES });
+    } catch (e) {
+      if (e.name !== 'AbortError') toast('No se pudo guardar el cancionero');
+      return null;
+    }
+    const parts = await resolveIn(dir, handle);
+    if (parts) {
+      const base = fileBase(handle.name);
+      return { handle, parts, name: base === safeFileName(name) ? name : base };
+    }
+    const again = await showModal({
+      title: 'Elige otra ubicación',
+      body: `<p>El cancionero tiene que quedar dentro de tu carpeta de canciones <b>${escapeHtml(dir.name)}</b>
+        (o en una de sus subcarpetas) para encontrar después sus canciones y audios.</p>`,
+      buttons: [{ label: 'Cancelar' }, { label: 'Elegir de nuevo…', primary: true, value: true }]
+    });
+    if (!again) return null;
+  }
+}
+
+// Devuelve true si el cancionero quedó guardado. Si ya tiene archivo se sobrescribe sin preguntar;
+// si no (o con asNew), se piden el nombre y el lugar. folderParts: subcarpeta (de la carpeta de
+// canciones) donde guardar las canciones nuevas y donde empieza el diálogo; por defecto, la de la lista.
+async function saveCancioneroDialog(asNew = false, folderParts = null) {
+  syncFromEditor();
+  const songs = bookSongs();
+  if (!songs.length) { toast('No hay canciones abiertas para guardar'); return false; }
 
   // Sin acceso a carpetas (Firefox, Safari): la lista apunta a "Título.md" junto a ella
   if (!canPickFiles) {
+    const name = await askBookName(songs, 'Queda en Descargas: guarda cada canción (.md) junto a la lista para que se encuentren.');
+    if (!name) return false;
     for (const d of docs) for (const a of d.audios) a.path = m3uAudioPath(a, a.src.replace(/^\.\//, ''));
-    const text = await buildM3u8(name, async d => [safeFileName(d.title.trim() || 'Sin título') + '.md']);
+    const text = await buildM3u8(name, async d => safeFileName(d.title.trim() || 'Sin título') + '.md');
     for (const d of docs) for (const a of d.audios) delete a.path;
-    if (await saveFile(text, name + '.m3u8', 'audio/x-mpegurl', '.m3u8', 'Cancionero')) {
+    const fileName = safeFileName(name) + '.m3u8';
+    if (await saveFile(text, fileName, 'audio/x-mpegurl', '.m3u8', 'Cancionero')) {
+      setActiveBook(name, null, 'Descargas/' + fileName);
       toast('Cancionero guardado. Guarda cada canción (.md) junto a la lista para que se encuentren.', 6000);
+      return true;
     }
-    return;
+    return false;
   }
 
   const dir = await songsFolder();
-  if (!dir || !await hasPermission(dir)) return;
-  const fileName = name + '.m3u8';
-  if (await fileHandleAt(dir, [fileName]) && !confirm(`Ya existe "${fileName}" en la carpeta de canciones. ¿Reemplazarlo?`)) return;
+  if (!dir || !await hasPermission(dir)) return false;
+  let handle = asNew ? null : await activeBookHandle();
+  let parts = handle && await resolveIn(dir, handle);
+  let name = state.cancioneroName || fileBase(handle?.name || '') || 'Mi cancionero';
+  if (!parts) {
+    const picked = await pickBookFile(dir, songs, folderParts || []);
+    if (!picked) return false;
+    ({ handle, parts, name } = picked);
+  }
+  const listParts = parts.slice(0, -1);
   try {
     toast('Guardando cancionero…', 60000);
-    await prepareAudioPaths(dir);
-    const text = await buildM3u8(name, d => ensureSongFile(d, dir));
-    await writeText(await dir.getFileHandle(fileName, { create: true }), text);
+    await prepareAudioPaths(dir, listParts);
+    const text = await buildM3u8(name, async d => relPath(listParts, await ensureSongFile(d, dir, folderParts || listParts)));
+    await writeText(handle, text);
+    const path = [dir.name, ...parts].join('/');
+    setActiveBook(name, handle, path);
     refresh();
     const kb = Math.max(1, Math.round(new Blob([text]).size / 1024));
-    toast(`Cancionero "${fileName}" guardado en "${dir.name}" (${songs.length} canciones, ${kb} KB)`, 4000);
+    toast(`Cancionero guardado en "${path}" (${songs.length} canciones, ${kb} KB)`, 4000);
+    return true;
   } catch (err) {
     console.error(err);
     toast('No se pudo guardar el cancionero: ' + err.message, 5000);
+    return false;
   } finally {
     for (const d of docs) for (const a of d.audios) delete a.path;
   }
+}
+
+// Antes de cerrar todas las pestañas (nuevo cancionero, abrir otro en su lugar): cada canción con
+// cambios se guarda en su archivo y el cancionero en su .m3u8; lo que aún no tiene archivo se guarda
+// en la carpeta sugerida (o se pregunta dónde). Devuelve false si se canceló.
+async function saveBeforeClosing(title) {
+  syncFromEditor();
+  const songs = bookSongs();
+  const changed = songs.filter(d => isDirty(d));
+  const book = bookDirty();
+  if (!changed.length && !book) return true;
+
+  const dir = canPickFiles ? await savedSongsFolder() : null;
+  const bookFile = dir && await activeBookHandle();
+  const bookParts = bookFile ? await resolveIn(dir, bookFile) : null;
+  let folder = bookParts ? bookParts.slice(0, -1) : [];
+  const files = new Map();
+  for (const d of changed) files.set(d, await docFileHandle(d));
+  const fresh = songs.filter(d => !files.get(d) && (book || isDirty(d)));
+  const folderLabel = () => dir ? [dir.name, ...folder].join('/') : `Música/${SONGS_FOLDER}`;
+  const bookName = escapeHtml(state.cancioneroName || 'Mi cancionero');
+
+  const choice = await showModal({
+    title,
+    body: `
+      <p>Antes de cerrar las pestañas se guarda cada canción en su archivo.</p>
+      ${changed.length ? `<ul class="book-list">${changed.map(d => `<li><b>${escapeHtml(d.title.trim() || 'Sin título')}</b> —
+        ${files.get(d) ? `en «${escapeHtml(files.get(d).name)}»` : 'nueva'}</li>`).join('')}</ul>` : ''}
+      ${fresh.length && canPickFiles ? `<p>Las canciones que aún no tienen archivo se guardan en
+        📁 <b class="cf-name">${escapeHtml(folderLabel())}</b>
+        ${dir ? '<button type="button" class="linkish" data-cf>Cambiar carpeta…</button>' : ''}</p>` : ''}
+      ${book ? `<label class="support-check"><input type="checkbox" id="cfBook" checked>
+        Guardar también el cancionero «${bookName}» (.m3u8)
+        ${state.cancioneroPath && bookParts ? `en «${escapeHtml(state.cancioneroPath)}»` : '— después eliges dónde'}</label>` : ''}
+      ${!canPickFiles ? '<p class="hint">Este navegador lo descarga todo junto (en Descargas).</p>' : ''}`,
+    onOpen: d => {
+      const btn = d.querySelector('[data-cf]');
+      if (btn) btn.onclick = async () => {
+        let picked;
+        try {
+          picked = await window.showDirectoryPicker({ mode: 'readwrite', startIn: (await dirHandleAt(dir, folder)) || dir });
+        } catch (_) { return; }
+        const parts = await resolveIn(dir, picked);
+        if (!parts) { modalFail(d, `Elige la carpeta «${dir.name}» o una de sus subcarpetas.`); return; }
+        modalFail(d, '');
+        folder = parts;
+        d.querySelector('.cf-name').textContent = folderLabel();
+      };
+    },
+    buttons: [
+      { label: 'Cancelar' },
+      { label: 'Cerrar sin guardar', value: 'skip' },
+      { label: 'Guardar y cerrar', primary: true, onClick: d => d.querySelector('#cfBook')?.checked ? 'book' : 'songs' }
+    ]
+  });
+  if (!choice) return false;
+  if (choice === 'skip') return true;
+  if (!canPickFiles) return downloadSongs(choice === 'book' ? songs : changed, choice === 'book' ? state.cancioneroName || 'Mi cancionero' : null);
+  return choice === 'book' ? saveCancioneroDialog(false, folder) : saveChangedSongs(folder);
 }
 
 // ============ ABRIR ============
@@ -197,8 +340,9 @@ function m3uSongs(list) {
 }
 
 // dir: carpeta desde la que se resuelven las rutas; baseParts: carpeta de la lista dentro de dir.
-// texts: { "Canción.md": texto } para listas que traen sus canciones (el cancionero de ejemplo)
-async function loadM3u8(list, dir, baseParts, texts = null) {
+// texts: { "Canción.md": texto } para listas que traen sus canciones (el cancionero de ejemplo).
+// origin: { handle, path } del .m3u8 si está en la carpeta de canciones (Guardar escribe ahí).
+async function loadM3u8(list, dir, baseParts, texts = null, origin = null) {
   const songs = m3uSongs(list);
   if (!songs.length) { toast('La lista está vacía'); return; }
   const choice = await askReplaceTabs(list.title || 'Cancionero', songs.length);
@@ -261,7 +405,9 @@ async function loadM3u8(list, dir, baseParts, texts = null) {
     opened.push(d);
   }
   replaceOrAddTabs(opened, choice === 'replace');
-  if (list.title) state.cancioneroName = list.title;
+  const title = list.title || fileBase(origin?.handle?.name || '') || 'Cancionero';
+  if (choice === 'replace') setActiveBook(title, origin?.handle || null, origin?.path || '');
+  else if (!state.cancioneroName) setActiveBook(title, null, '', false);
   if (list.meta.notacion === 'anglosajona' || list.meta.notacion === 'latina') {
     state.notation = list.meta.notacion === 'latina' ? 'latin' : 'eng';
     applyState();
@@ -285,8 +431,7 @@ async function askReplaceTabs(title, count) {
       { label: 'Reemplazar pestañas', primary: true, value: 'replace' }
     ]
   });
-  if (choice === 'replace' && docs.some(d => isDirty(d) && !isBlank(d)) &&
-      !confirm('Hay pestañas con cambios sin guardar. ¿Reemplazarlas igualmente?')) return null;
+  if (choice === 'replace' && !await saveBeforeClosing('Antes de reemplazar las pestañas')) return null;
   return choice;
 }
 
@@ -306,13 +451,14 @@ function replaceOrAddTabs(newDocs, replace) {
 // solas; si no, se pide una vez la carpeta donde está la lista.
 async function openM3u8(file, handle) {
   const list = parseM3u8(await file.text());
-  let dir = null, baseParts = [];
+  let dir = null, baseParts = [], origin = null;
   if (canPickFiles) {
     const songsDir = await songsDirWithPermission(true, 'read');
     const parts = handle && await resolveIn(songsDir, handle);
     if (parts) {
       dir = songsDir;
       baseParts = parts.slice(0, -1);
+      origin = { handle, path: [songsDir.name, ...parts].join('/') };
     } else {
       const go = await showModal({
         title: 'Abrir cancionero',
@@ -327,7 +473,7 @@ async function openM3u8(file, handle) {
       }
     }
   }
-  await loadM3u8(list, dir, baseParts);
+  await loadM3u8(list, dir, baseParts, null, origin);
 }
 
 // ---- Cancioneros viejos (.cancionero.json v1): solo lectura ----
@@ -357,7 +503,7 @@ async function loadCancionero(data, handle = null) {
   }));
   if (!newDocs.length) { toast('El cancionero está vacío'); return; }
   replaceOrAddTabs(newDocs, choice === 'replace');
-  if (data.titulo) state.cancioneroName = data.titulo;
+  if (choice === 'replace' || !state.cancioneroName) setActiveBook(data.titulo || 'Cancionero', null, '', false);
   toast(`Cancionero "${data.titulo || ''}" abierto: ${newDocs.length} canciones. Guárdalo de nuevo para pasarlo al formato .m3u8.`, 5000);
   relinkAll();
 }

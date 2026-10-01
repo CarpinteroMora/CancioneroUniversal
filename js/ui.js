@@ -62,7 +62,8 @@ function showModal({ title, body, buttons = [{ label: 'Cerrar', primary: true }]
       actions.appendChild(btn);
     }
     dlg.querySelector('form').onsubmit = e => { e.preventDefault(); primaryBtn?.click(); };
-    dlg.onclose = () => resolve(null);
+    // El aviso de cierre del diálogo anterior puede llegar cuando este ya se abrió: se ignora
+    dlg.onclose = () => { if (!dlg.open) resolve(null); };
     dlg.showModal();
     onOpen?.(dlg);
   });

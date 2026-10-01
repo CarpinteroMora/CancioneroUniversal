@@ -11,6 +11,8 @@ on:
       - 'css/**'
       - 'index.html'
       - 'vendor/**'
+      - 'icons/**'
+      - 'manifest.webmanifest'
       - '.github/workflows/instalador.yml'
   workflow_dispatch:
 
@@ -35,6 +37,7 @@ jobs:
           pip install pyinstaller
           pyinstaller --onefile --noconsole --name CancioneroUniversal-Windows \
             --add-data "index.html:." --add-data "css:css" --add-data "js:js" --add-data "vendor:vendor" \
+            --add-data "icons:icons" --add-data "manifest.webmanifest:." \
             servidor/canciotras_servidor.py
       - name: Publicar
         shell: bash

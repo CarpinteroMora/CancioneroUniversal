@@ -12,6 +12,21 @@ HTML, texto y Markdown.
 Funciona en cualquier navegador, también en el celular. Al abrirla por primera vez muestra un
 cancionero de ejemplo.
 
+## En el teléfono y la tablet
+
+La app se adapta a la pantalla: menú **☰**, botón **🎼 Tono** que abre las notas en una hoja abajo,
+letra que se **ajusta al ancho** (botón **↔**), barra del atril abajo y paso de una canción a otra
+**deslizando el dedo** hacia los lados. En el atril la pantalla no se apaga.
+
+Se puede **instalar como aplicación** y así funciona también **sin internet**:
+
+- **Android (Chrome):** menú **⋮ → Instalar aplicación**, o el aviso «Instalar» que aparece abajo.
+- **iPhone y iPad (Safari):** botón **Compartir (□↑) → Agregar a inicio**.
+- **Computador (Chrome o Edge):** ícono **Instalar** al final de la barra de direcciones.
+
+También desde la app: *Acerca de → Instalar app en este dispositivo…*. Cuando hay internet se
+carga siempre la versión más nueva.
+
 ## Ayúdanos a seguir trabajando
 
 Cancionero Universal es gratuito. Si te es útil y quieres colaborar económicamente para que sigamos

@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '3.8.0',
+  version: '4.0.0',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -72,7 +72,8 @@ function setMode(m) {
   $('#btnEdit').classList.toggle('active', m === 'edit');
   $('#btnAtril').classList.toggle('active', m === 'atril');
   if (m !== 'atril') stopAutoscroll();
-  if (m === 'edit') { autosize(); editor.focus({ preventScroll: true }); }
+  // En pantallas táctiles el foco abriría el teclado sin que se pida
+  if (m === 'edit') { autosize(); if (!isTouch()) editor.focus({ preventScroll: true }); }
   scheduleSave();
 }
 
@@ -526,7 +527,9 @@ const MENUS = [
   { label: 'Acerca de', items: [
     { label: `Acerca de ${APP_INFO.nombre}…`, action: 'about' },
     { label: 'Ayúdanos a seguir trabajando…', action: 'support' },
-    { label: 'Guía de sintaxis', action: 'syntax' }
+    { label: 'Guía de sintaxis', action: 'syntax' },
+    { sep: true },
+    { label: 'Instalar app en este dispositivo…', action: 'installApp' }
   ]}
 ];
 
@@ -605,7 +608,8 @@ const ACTIONS = {
 
   about: showAbout,
   support: showSupport,
-  syntax: showSyntax
+  syntax: showSyntax,
+  installApp: showInstallApp
 };
 
 function runAction(name) {

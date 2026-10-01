@@ -2,8 +2,16 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cancionero Universal</title>
+<meta name="theme-color" content="#1a73e8">
+<meta name="description" content="Editor y atril de cancioneros con acordes, transposición, audios y exportación a PowerPoint, Word y OpenDocument">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icono-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cancionero">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a73e8'/%3E%3Ctext x='16' y='24' font-size='22' text-anchor='middle' fill='white'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/canciotras.css">
 </head>
@@ -12,6 +20,7 @@
 <div class="chrome">
   <header class="top-bar">
     <div class="title-row">
+      <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menú" title="Menú">☰</button>
       <div class="logo" title="Cancionero Universal">♪</div>
       <div class="title-col">
         <div class="title-line">
@@ -38,15 +47,19 @@
     <div class="separator"></div>
     <button data-action="toggleNotation" id="btnNotation">🔤 Anglosajona</button>
     <div class="mode-toggle">
-      <button id="btnEdit" data-action="modeEdit">✏️ Edición</button>
-      <button id="btnAtril" data-action="modeAtril">🎼 Atril</button>
+      <button id="btnEdit" data-action="modeEdit" title="Edición">✏️<span class="lbl"> Edición</span></button>
+      <button id="btnAtril" data-action="modeAtril" title="Atril">🎼<span class="lbl"> Atril</span></button>
     </div>
   </div>
 
   <div class="transposer">
     <span class="transposer-label">🎼 Tono:</span>
-    <div class="notes-container" id="notesContainer"></div>
-    <span class="key-info" id="keyInfo"></span>
+    <button type="button" class="key-toggle" id="keyToggle" aria-haspopup="dialog">🎼 Tono ▾</button>
+    <div class="key-sheet" id="keySheet">
+      <div class="key-sheet-head"><b>Cambiar de tono</b><button type="button" class="panel-close" id="keySheetClose" aria-label="Cerrar">×</button></div>
+      <div class="notes-container" id="notesContainer"></div>
+      <span class="key-info" id="keyInfo"></span>
+    </div>
     <span class="notation-badge" id="notationBadge" data-action="toggleNotation" title="Cambiar notación">LATINA</span>
   </div>
 
@@ -57,7 +70,25 @@
   💡 Escribe los acordes en una línea sobre la letra (<code>Do Rem Sol7 Fa#m Sib</code> o <code>C Dm G7 F#m Bb</code>).
   El <strong>tono se detecta con el primer acorde</strong>.
   Comentarios: <code>&gt; texto</code> · Voces: <code>[Voz: Tenor]</code> · Formato: <code>**negrita**</code> <code>_cursiva_</code> <code>&lt;u&gt;subrayado&lt;/u&gt;</code>
+  <button class="banner-more" type="button" id="bannerMore">Ver más</button>
   <button class="banner-close" data-action="hideBanner" title="Ocultar">×</button>
+</div>
+
+<div class="drawer" id="drawer" hidden>
+  <nav class="drawer-panel" aria-label="Menú">
+    <div class="drawer-head">
+      <div class="logo">♪</div>
+      <span class="brand">Cancionero Universal</span>
+      <button type="button" class="panel-close" id="drawerClose" aria-label="Cerrar menú">×</button>
+    </div>
+    <div id="drawerMenus"></div>
+  </nav>
+</div>
+<div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+<div class="install-hint" id="installHint" hidden>
+  <span>📲 Instala Cancionero Universal en este dispositivo</span>
+  <button type="button" class="btn primary" id="installHintGo">Instalar</button>
+  <button type="button" class="panel-close" id="installHintClose" aria-label="Cerrar">×</button>
 </div>
 
 <main class="doc-area">
@@ -138,6 +169,7 @@
 <script src="js/ejemplo.js"></script>
 <script src="js/guardar.js"></script>
 <script src="js/colaboradores.js"></script>
+<script src="js/movil.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

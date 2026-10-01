@@ -91,6 +91,7 @@ mimetypes.add_type("audio/mp4", ".m4a")
 mimetypes.add_type("audio/webm", ".webm")
 mimetypes.add_type("audio/ogg", ".opus")
 mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def log(msg):

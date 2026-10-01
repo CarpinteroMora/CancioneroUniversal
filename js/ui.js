@@ -197,12 +197,19 @@ function fillDropdown(dd, items) {
       const sub = el('div', 'menu-dropdown menu-sub');
       fillDropdown(sub, it.submenu);
       row.appendChild(sub);
-      row.addEventListener('mouseenter', () => {
+      const openSub = () => {
         dd.querySelectorAll(':scope > .sub-open').forEach(r => r !== row && r.classList.remove('sub-open'));
         row.classList.add('sub-open');
+        sub.classList.remove('flip');
+        if (sub.getBoundingClientRect().right > window.innerWidth - 4) sub.classList.add('flip');
+      };
+      // En pantallas táctiles el toque también simula el paso del ratón: solo el ratón abre al pasar
+      row.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') openSub(); });
+      row.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') row.classList.remove('sub-open'); });
+      row.addEventListener('click', e => {
+        if (e.target.closest('.menu-sub')) return;
+        if (row.classList.contains('sub-open')) row.classList.remove('sub-open'); else openSub();
       });
-      row.addEventListener('mouseleave', () => row.classList.remove('sub-open'));
-      row.addEventListener('click', e => { if (!e.target.closest('.menu-sub')) row.classList.toggle('sub-open'); });
     } else {
       row.addEventListener('click', e => { e.stopPropagation(); closeMenus(); runAction(it.action); });
     }
@@ -212,9 +219,13 @@ function fillDropdown(dd, items) {
 
 function openMenuFor(wrap, menu) {
   closeMenus();
-  fillDropdown(wrap.querySelector('.menu-dropdown'), menu.items);
+  const dd = wrap.querySelector('.menu-dropdown');
+  fillDropdown(dd, menu.items);
+  dd.style.left = '';
   wrap.classList.add('open');
   openMenu = wrap;
+  const over = dd.getBoundingClientRect().right - (window.innerWidth - 4);
+  if (over > 0) dd.style.left = -over + 'px';
 }
 
 function buildMenubar(menus) {
@@ -228,7 +239,9 @@ function buildMenubar(menus) {
       e.preventDefault();
       if (openMenu === wrap) closeMenus(); else openMenuFor(wrap, menu);
     });
-    title.addEventListener('mouseenter', () => { if (openMenu && openMenu !== wrap) openMenuFor(wrap, menu); });
+    title.addEventListener('pointerenter', e => {
+      if (e.pointerType === 'mouse' && openMenu && openMenu !== wrap) openMenuFor(wrap, menu);
+    });
     bar.appendChild(wrap);
   }
 }

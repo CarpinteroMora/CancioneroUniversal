@@ -106,34 +106,126 @@ const formatDuration = s => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 };
 
-const APP_DOWNLOAD_URL = 'https://github.com/CarpinteroMora/CancioneroUniversal/archive/refs/heads/main.zip';
+const INSTALLER_URLS = {
+  windows: 'https://github.com/CarpinteroMora/CancioneroUniversal/releases/latest/download/CancioneroUniversal-Windows.exe',
+  script: 'https://carpinteromora.github.io/CancioneroUniversal/instalar.sh'
+};
+const INSTALL_CMD = `curl -fsSL ${INSTALLER_URLS.script} | bash`;
+const OS_NAMES = { windows: 'Windows', linux: 'Linux', mac: 'Mac' };
 
-// Solo se abre a pedido («¿Escucharlo aquí mismo?»), nunca solo: sin servidor los videos se abren en su página
-async function showExtractorSetup(retry) {
+function detectOS() {
+  const p = navigator.userAgentData?.platform || navigator.userAgent || '';
+  return /Win/i.test(p) ? 'windows' : /Mac/i.test(p) ? 'mac' : 'linux';
+}
+
+function installStepHtml(os) {
+  if (os === 'windows') return `
+    <a class="btn primary install-get" href="${INSTALLER_URLS.windows}" download>Descargar el instalador para Windows</a>
+    <p class="hint">Ábrelo con doble clic cuando termine de descargarse. Si Windows muestra «Windows protegió su PC»,
+      pulsa <b>Más información</b> y luego <b>Ejecutar de todas formas</b> (el programa es libre y no está firmado).</p>`;
+  return `
+    <p>${os === 'mac' ? 'Abre la <b>Terminal</b> (Cmd+Espacio, escribe «Terminal» y pulsa Enter)'
+      : 'Abre la <b>Terminal</b> (Ctrl+Alt+T)'}, pega este comando y pulsa Enter:</p>
+    <div class="install-cmd"><code>${escapeHtml(INSTALL_CMD)}</code>
+      <button type="button" class="btn primary install-copy">Copiar</button></div>
+    <p class="hint">Descarga Cancionero Universal, lo deja funcionando en segundo plano y lo agrega a tu menú de aplicaciones.
+      Necesita Python 3 (casi siempre ya está instalado).</p>`;
+}
+
+// «Instalar reproducción en local»: entrega el instalador de este sistema, espera a que el servidor
+// responda y entonces habilita «Reproducir». Solo se abre a pedido, nunca solo.
+async function showLocalInstall(retry) {
+  if (!ON_PUBLIC_WEB) return showLocalLauncher(retry);
+  let os = detectOS(), waiting = false, ready = false, closed = false;
+  await showModal({
+    title: 'Instalar reproducción en local',
+    body: `
+      <p>Para que los videos de YouTube suenen aquí mismo (con su velocidad), este PC necesita el
+        reproductor local de Cancionero Universal. Se instala una sola vez.</p>
+      <h3 class="install-title">1. Instalar en <span class="install-os"></span></h3>
+      <div class="install-step"></div>
+      <p class="install-other"></p>
+      <h3 class="install-title">2. Reproducir</h3>
+      <p class="install-status">Cuando termine la instalación se activa el botón <b>Reproducir</b>.</p>
+      <p class="hint">Si el navegador pide permiso para acceder a dispositivos de tu red local, pulsa <b>Permitir</b>:
+        así esta página puede usar el reproductor que acabas de instalar.</p>`,
+    buttons: [{ label: 'Cerrar' }, { label: 'Reproducir', primary: true, onClick: () => ready ? 'play' : false }],
+    onOpen: dlg => {
+      const playBtn = dlg.querySelector('.modal-actions .primary');
+      const status = dlg.querySelector('.install-status');
+      playBtn.disabled = true;
+      const render = () => {
+        dlg.querySelector('.install-os').textContent = OS_NAMES[os];
+        dlg.querySelector('.install-step').innerHTML = installStepHtml(os);
+        dlg.querySelector('.install-other').innerHTML = '¿Otro sistema? ' + Object.keys(OS_NAMES).filter(k => k !== os)
+          .map(k => `<a href="#" data-os="${k}">${OS_NAMES[k]}</a>`).join(' · ');
+      };
+      const wait = async () => {
+        if (waiting) return;
+        waiting = true;
+        localStorage.setItem(WEB_SERVER_KEY, '1');
+        status.innerHTML = '<span class="install-spin"></span> Esperando la instalación…';
+        const until = Date.now() + 15 * 60000;
+        while (!closed && Date.now() < until) {
+          if (await extractorStatus()) {
+            ready = true;
+            extractorOnline = true;
+            extractorCheckedAt = Date.now();
+            status.innerHTML = '✅ Listo: el reproductor local está funcionando. Pulsa <b>Reproducir</b>.';
+            playBtn.disabled = false;
+            playBtn.focus();
+            return;
+          }
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        waiting = false;
+        if (!closed) status.textContent = 'No encuentro el reproductor local todavía. Vuelve a pulsar Descargar o Copiar para seguir esperando.';
+      };
+      dlg.querySelector('.modal-body').addEventListener('click', async e => {
+        const other = e.target.closest('[data-os]');
+        if (other) { e.preventDefault(); os = other.dataset.os; render(); return; }
+        if (e.target.closest('.install-get')) wait();
+        if (e.target.closest('.install-copy')) {
+          wait();
+          try { await navigator.clipboard.writeText(INSTALL_CMD); e.target.textContent = 'Copiado ✓'; } catch (_) {
+            const range = document.createRange();
+            range.selectNodeContents(dlg.querySelector('.install-cmd code'));
+            getSelection().removeAllRanges();
+            getSelection().addRange(range);
+            e.target.textContent = 'Cópialo (Ctrl+C)';
+          }
+        }
+      });
+      render();
+    }
+  });
+  closed = true;
+  if (!ready) {
+    localStorage.removeItem(WEB_SERVER_KEY);
+    return;
+  }
+  updateAudioBar();
+  $('#audioPlayer').play().catch(() => {});
+  retry?.();
+}
+
+// App abierta desde su carpeta (file:// o el propio servidor): basta con abrirla una vez con su lanzador
+async function showLocalLauncher(retry) {
   const launcher = /Windows/i.test(navigator.userAgent) ? 'iniciar-canciotras.bat' : 'iniciar-canciotras.sh';
   const v = await showModal({
     title: 'Escuchar los videos dentro de la app',
-    body: ON_PUBLIC_WEB ? `
-      <p>En esta página web los videos de YouTube se abren en YouTube. Para escucharlos aquí mismo
-        (con su velocidad), instala Cancionero Universal en tu PC:</p>
-      <ol>
-        <li><a href="${APP_DOWNLOAD_URL}" target="_blank" rel="noopener">Descarga Cancionero Universal</a> y descomprímelo.</li>
-        <li>Ábrelo una vez con <b>${launcher}</b> (necesita <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3</a>).</li>
-        <li>Vuelve aquí y pulsa <b>Ya lo instalé</b>. Si el navegador pide permiso para acceder a la red local, acéptalo.</li>
-      </ol>` : `
+    body: `
       <p>Para escuchar videos de YouTube y otras páginas, abre Cancionero Universal una vez con
         <b>${launcher}</b> (está en la carpeta de la app).</p>
       <p class="hint">Desde ese momento Cancionero Universal aparece en tu menú de aplicaciones y los videos suenan siempre, sin hacer nada más.</p>`,
-    buttons: [{ label: 'Ahora no' }, { label: ON_PUBLIC_WEB ? 'Ya lo instalé' : 'Listo, reintentar', primary: true, value: 'retry' }]
+    buttons: [{ label: 'Ahora no' }, { label: 'Listo, reintentar', primary: true, value: 'retry' }]
   });
   if (v !== 'retry') return;
-  if (ON_PUBLIC_WEB) localStorage.setItem(WEB_SERVER_KEY, '1');
   if (await refreshExtractorOnline(true)) {
     updateAudioBar();
     retry?.();
     return;
   }
-  if (ON_PUBLIC_WEB) localStorage.removeItem(WEB_SERVER_KEY);
   toast(`Todavía no encuentro Cancionero Universal en este equipo. Ábrelo con ${launcher} y vuelve a probar.`, 7000);
 }
 
@@ -148,7 +240,7 @@ async function saveExtractedAudio() {
     blob = await (await fetch(extractorAudioUrl(a.src))).blob();
   } catch (err) {
     toast('');
-    if (err.offline) showExtractorSetup(saveExtractedAudio); else toast(err.message, 6000);
+    if (err.offline) showLocalInstall(saveExtractedAudio); else toast(err.message, 6000);
     return;
   }
   toast('');

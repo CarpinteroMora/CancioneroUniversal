@@ -4,6 +4,11 @@ servidor/cache/
 __pycache__/
 *.log
 
+# Instalador de Windows (lo construye GitHub Actions)
+build/
+dist/
+*.spec
+
 # Descargas usadas para preparar vendor/
 .descargas/
 

@@ -495,7 +495,17 @@ body.mode-atril .atril-controls { display: flex; }
   padding: 10px 20px; cursor: pointer; font-size: 15px; font-weight: 600; white-space: nowrap;
 }
 .page-btn:hover { background: #a52722; }
-.page-help { border: none; background: none; color: #1a73e8; cursor: pointer; font-size: 13px; text-decoration: underline; white-space: nowrap; }
+.install-title { font-size: 15px; margin: 16px 0 6px; }
+.install-step .install-get { display: inline-block; text-decoration: none; }
+.install-cmd { display: flex; gap: 8px; align-items: center; background: #202124; border-radius: 8px; padding: 8px 8px 8px 12px; }
+.install-cmd code { flex: 1; color: #e8eaed; font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.install-other { font-size: 13px; color: #5f6368; }
+.install-status { padding: 8px 12px; background: #f1f3f4; border-radius: 8px; }
+.install-spin {
+  display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+  border: 2px solid #1a73e8; border-right-color: transparent; border-radius: 50%; animation: install-spin .8s linear infinite;
+}
+@keyframes install-spin { to { transform: rotate(360deg); } }
 .audio-bar.page-mode audio, .audio-bar.page-mode .speed { display: none; }
 .audio-bar.page-mode { justify-content: center; }
 .pick-row { display: flex; align-items: center; gap: 10px; }
@@ -536,6 +546,7 @@ dialog h2 { font-size: 18px; margin-bottom: 12px; }
 .btn:hover { background: #f1f3f4; }
 .btn.primary { background: #1a73e8; color: white; border-color: #1a73e8; }
 .btn.primary:hover { background: #1765cc; }
+.btn:disabled, .btn:disabled:hover { opacity: .4; cursor: default; }
 .field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 13px; color: #5f6368; }
 .field input, .field select { padding: 8px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 14px; color: #202124; }
 .hint { font-size: 12px; color: #5f6368; }

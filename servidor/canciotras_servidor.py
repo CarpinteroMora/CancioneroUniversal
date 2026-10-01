@@ -45,10 +45,19 @@ import webbrowser
 import zipfile
 
 VERSION = "1.0.0"
-HERE = os.path.dirname(os.path.abspath(__file__))
-APP_DIR = os.path.dirname(HERE)
-BIN_DIR = os.path.join(HERE, "bin")
 IS_WINDOWS = os.name == "nt"
+# Empaquetado con PyInstaller (instalador de Windows): la app viaja dentro del ejecutable y lo
+# que se descarga (yt-dlp, Deno) va a la carpeta de datos del usuario, junto a la copia instalada.
+FROZEN = getattr(sys, "frozen", False)
+if FROZEN:
+    APP_DIR = sys._MEIPASS
+    HERE = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "Cancionero Universal")
+    INSTALLED_EXE = os.path.join(HERE, "CancioneroUniversal.exe" if IS_WINDOWS else "CancioneroUniversal")
+    RUNNING_INSTALLED = os.path.normcase(os.path.abspath(sys.executable)) == os.path.normcase(INSTALLED_EXE)
+else:
+    HERE = os.path.dirname(os.path.abspath(__file__))
+    APP_DIR = os.path.dirname(HERE)
+BIN_DIR = os.path.join(HERE, "bin")
 OLD_CACHE_DIR = os.path.join(HERE, "cache")
 # En Windows, que yt-dlp no abra ventanas de consola al trabajar en segundo plano
 NO_WINDOW = {"creationflags": 0x08000000} if IS_WINDOWS else {}
@@ -63,7 +72,9 @@ MEDIA_EXTS = {"mp3", "ogg", "oga", "opus", "wav", "m4a", "aac", "flac", "weba", 
               "mp4", "m4v", "webm", "mov", "mkv", "ogv", "3gp", "avi", "mpeg", "mpg"}
 FFMPEG = shutil.which("ffmpeg")
 
-YTDLP_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+# Sin Python a mano (empaquetado) se usa el yt-dlp autónomo de cada sistema
+YTDLP_NAME = ("yt-dlp.exe" if IS_WINDOWS else "yt-dlp_macos" if sys.platform == "darwin" else "yt-dlp_linux") if FROZEN else "yt-dlp"
+YTDLP_URL = f"https://github.com/yt-dlp/yt-dlp/releases/latest/download/{YTDLP_NAME}"
 DENO_ASSETS = {
     ("linux", "x86_64"): "deno-x86_64-unknown-linux-gnu.zip",
     ("linux", "aarch64"): "deno-aarch64-unknown-linux-gnu.zip",
@@ -102,7 +113,7 @@ def make_executable(path):
 def ensure_ytdlp(update=False):
     """Usa una copia propia y actualizada de yt-dlp (la de los repositorios suele estar vieja)."""
     os.makedirs(BIN_DIR, exist_ok=True)
-    local = os.path.join(BIN_DIR, "yt-dlp")
+    local = os.path.join(BIN_DIR, YTDLP_NAME)
     if not os.path.exists(local):
         try:
             download(YTDLP_URL, local)
@@ -110,7 +121,7 @@ def ensure_ytdlp(update=False):
         except (urllib.error.URLError, OSError) as e:
             log(f"No se pudo descargar yt-dlp: {e}")
     if os.path.exists(local):
-        cmd = [sys.executable, local]
+        cmd = [local] if FROZEN else [sys.executable, local]
         if update:
             subprocess.run(cmd + ["-U"], check=False, **NO_WINDOW)
         return cmd
@@ -271,7 +282,7 @@ class Extractor:
 
     def update_if_old(self):
         """YouTube cambia a menudo: actualiza yt-dlp en silencio cada pocos días."""
-        local = os.path.join(BIN_DIR, "yt-dlp")
+        local = os.path.join(BIN_DIR, YTDLP_NAME)
         if not os.path.exists(local) or time.time() - os.path.getmtime(local) < UPDATE_EVERY:
             return
         try:
@@ -959,7 +970,8 @@ def windows_paths():
     appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
     programs = os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs")
     return {"startup": os.path.join(programs, "Startup", "CancioTras servidor.vbs"),
-            "menu": os.path.join(programs, "CancioTras.lnk")}
+            "menu": os.path.join(programs, "Cancionero Universal.lnk"),
+            "old_menu": os.path.join(programs, "CancioTras.lnk")}
 
 
 def mac_paths():
@@ -969,6 +981,35 @@ def mac_paths():
 def pythonw():
     candidate = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     return candidate if os.path.exists(candidate) else sys.executable
+
+
+def server_cmd():
+    """Cómo arrancar este servidor: la copia instalada del ejecutable, o Python con este script."""
+    if FROZEN:
+        return [INSTALLED_EXE]
+    return [pythonw() if IS_WINDOWS else sys.executable, SCRIPT]
+
+
+def install_frozen_copy():
+    """El instalador descargado se copia a la carpeta de datos (y reemplaza una versión anterior)."""
+    if not FROZEN or RUNNING_INSTALLED:
+        return
+    if IS_WINDOWS:
+        run_quiet(["taskkill", "/F", "/IM", os.path.basename(INSTALLED_EXE)])
+    else:
+        run_quiet(["pkill", "-f", INSTALLED_EXE])
+    os.makedirs(HERE, exist_ok=True)
+    tmp = INSTALLED_EXE + ".nuevo"
+    shutil.copy2(sys.executable, tmp)
+    make_executable(tmp)
+    # La copia anterior puede tardar un momento en cerrarse (Windows no deja reemplazarla mientras corre)
+    for _ in range(20):
+        try:
+            os.replace(tmp, INSTALLED_EXE)
+            return
+        except OSError:
+            time.sleep(0.5)
+    os.replace(tmp, INSTALLED_EXE)
 
 
 def is_installed():
@@ -995,17 +1036,24 @@ def start_detached(args):
 
 def install(port):
     """Deja el servidor funcionando en segundo plano (también tras reiniciar) y crea el acceso directo."""
+    install_frozen_copy()
+    cmd = server_cmd()
+    background = cmd + ["--segundo-plano", "--puerto", str(port)]
     if IS_WINDOWS:
         p = windows_paths()
-        exe = pythonw()
-        write(p["startup"], f'CreateObject("WScript.Shell").Run """{exe}"" ""{SCRIPT}"" --segundo-plano --puerto {port}", 0, False\n')
+        vbs_args = " ".join(f'""{a}""' for a in cmd)
+        write(p["startup"], f'CreateObject("WScript.Shell").Run "{vbs_args} --segundo-plano --puerto {port}", 0, False\n')
+        args = " ".join(f'"{a}"' for a in cmd[1:])
+        workdir = HERE if FROZEN else APP_DIR
         ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');$s.TargetPath='{exe}';"
-              "$s.Arguments='\"{script}\"';$s.WorkingDirectory='{dir}';$s.Description='Cancionero Universal';$s.Save()").format(
-            lnk=p["menu"].replace("'", "''"), exe=exe.replace("'", "''"),
-            script=SCRIPT.replace("'", "''"), dir=APP_DIR.replace("'", "''"))
+              "$s.Arguments='{args}';$s.WorkingDirectory='{dir}';$s.Description='Cancionero Universal';$s.Save()").format(
+            lnk=p["menu"].replace("'", "''"), exe=cmd[0].replace("'", "''"),
+            args=args.replace("'", "''"), dir=workdir.replace("'", "''"))
         run_quiet(["powershell", "-NoProfile", "-Command", ps])
+        if os.path.exists(p["old_menu"]):
+            os.remove(p["old_menu"])
         if not already_running(port):
-            start_detached([exe, SCRIPT, "--segundo-plano", "--puerto", str(port)])
+            start_detached(background)
     elif sys.platform == "darwin":
         agent = mac_paths()["agent"]
         write(agent, f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -1013,8 +1061,7 @@ def install(port):
 <plist version="1.0"><dict>
   <key>Label</key><string>com.{SERVICE}.servidor</string>
   <key>ProgramArguments</key><array>
-    <string>{sys.executable}</string><string>{SCRIPT}</string>
-    <string>--segundo-plano</string><string>--puerto</string><string>{port}</string>
+    {"".join(f"<string>{a}</string>" for a in background)}
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -1024,14 +1071,14 @@ def install(port):
         run_quiet(["launchctl", "load", agent])
     else:
         p = linux_paths()
-        launcher = os.path.join(APP_DIR, "iniciar-canciotras.sh")
+        launcher = INSTALLED_EXE if FROZEN else os.path.join(APP_DIR, "iniciar-canciotras.sh")
         write(p["icon"], ICON_SVG)
         write(p["menu"], f"""[Desktop Entry]
 Type=Application
 Name=Cancionero Universal
 Comment=Editor y trasponedor de canciones con acordes
 Exec="{launcher}"
-Path={APP_DIR}
+Path={HERE if FROZEN else APP_DIR}
 Icon={SERVICE}
 Terminal=false
 Categories=AudioVideo;Audio;Music;
@@ -1054,21 +1101,24 @@ Description=Cancionero Universal: servidor local
 Requires={SERVICE}.socket
 
 [Service]
-ExecStart="{sys.executable}" "{SCRIPT}" --segundo-plano --puerto {port}
-WorkingDirectory={APP_DIR}
+ExecStart={" ".join(f'"{a}"' for a in background)}
+WorkingDirectory={HERE if FROZEN else APP_DIR}
 """)
             run_quiet(["systemctl", "--user", "daemon-reload"])
-            run_quiet(["systemctl", "--user", "enable", "--now", f"{SERVICE}.socket"])
+            # Si ya estaba instalado en otra carpeta, que la próxima conexión use esta
+            run_quiet(["systemctl", "--user", "stop", f"{SERVICE}.service"])
+            run_quiet(["systemctl", "--user", "enable", f"{SERVICE}.socket"])
+            run_quiet(["systemctl", "--user", "restart", f"{SERVICE}.socket"])
         else:
             write(p["autostart"], f"""[Desktop Entry]
 Type=Application
 Name=Cancionero Universal (servidor)
-Exec="{sys.executable}" "{SCRIPT}" --segundo-plano --puerto {port}
+Exec={" ".join(f'"{a}"' for a in background)}
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
 """)
             if not already_running(port):
-                start_detached([sys.executable, SCRIPT, "--segundo-plano", "--puerto", str(port)])
+                start_detached(background)
     log("Instalado: Cancionero Universal funcionará en segundo plano y está en el menú de aplicaciones.")
 
 
@@ -1089,6 +1139,19 @@ def uninstall():
     if not IS_WINDOWS and sys.platform != "darwin":
         run_quiet(["systemctl", "--user", "daemon-reload"])
     log("Desinstalado (tus canciones y la carpeta de la app no se tocan).")
+
+
+def notify_installed():
+    msg = ("Cancionero Universal quedó instalado y funcionando en segundo plano.\n\n"
+           "Vuelve a la página y pulsa «Reproducir» (la primera vez puede tardar un par de minutos "
+           "mientras descarga sus componentes).\n\nTambién está en el menú Inicio.")
+    log(msg)
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, msg, "Cancionero Universal", 0x40)
+        except Exception:
+            pass
 
 
 def wait_until_running(port, seconds=10):
@@ -1129,6 +1192,11 @@ def main():
 
     background = args.segundo_plano
     sock = inherited_socket() if background else None
+    if FROZEN and not RUNNING_INSTALLED and not background:
+        # Doble clic en el instalador descargado: se instala (o actualiza) y queda en segundo plano
+        install(args.puerto)
+        notify_installed()
+        return
     if not sock:
         if already_running(args.puerto):
             if not (background or args.no_abrir):

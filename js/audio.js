@@ -166,7 +166,7 @@ function updateAudioBar() {
   const pageMode = viaPage && !serverReady();
   bar.classList.toggle('page-mode', pageMode);
   $('#pageBtn').hidden = !pageMode;
-  $('#pageHelp').hidden = !pageMode || isMobileDevice();
+  $('#installBtn').hidden = !pageMode || isMobileDevice();
   if (pageMode) {
     $('#pageBtn').textContent = `▶ Escuchar en ${normalizeMediaUrl(audioPage(a)).streaming || 'su página'}`;
     if (player.dataset.src) {
@@ -199,7 +199,7 @@ $('#audioPlayer').addEventListener('playing', () => {
 const reloadAudio = () => { $('#audioPlayer').dataset.src = ''; updateAudioBar(); };
 
 $('#pageBtn').addEventListener('click', () => openAudioPage(currentAudio()));
-$('#pageHelp').addEventListener('click', () => showExtractorSetup(reloadAudio));
+$('#installBtn').addEventListener('click', () => showLocalInstall());
 
 $('#audioPlayer').addEventListener('error', async () => {
   const a = currentAudio();

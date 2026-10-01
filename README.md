@@ -12,19 +12,34 @@ HTML, texto y Markdown.
 Funciona en cualquier navegador, también en el celular. Al abrirla por primera vez muestra un
 cancionero de ejemplo.
 
-## Instalarla en el PC (para los audios de YouTube)
+## Instalar la reproducción local (audios de YouTube)
 
 El navegador por sí solo no puede sacar el audio de YouTube, Vimeo, SoundCloud y otras páginas.
-Para eso Cancionero Universal trae un pequeño servidor local que necesita
+En la página web esos audios se abren en YouTube; para escucharlos dentro de la app, el PC necesita
+el reproductor local de Cancionero Universal. En la barra de audio, el botón
+**«Instalar reproducción en local»** guía todo el proceso:
+
+- **Windows:** descarga
+  [CancioneroUniversal-Windows.exe](https://github.com/CarpinteroMora/CancioneroUniversal/releases/latest/download/CancioneroUniversal-Windows.exe)
+  y ábrelo con doble clic (no necesita Python). Si Windows muestra «Windows protegió su PC», pulsa
+  **Más información** y luego **Ejecutar de todas formas**.
+- **Linux y Mac:** abre la Terminal, pega este comando y pulsa Enter (necesita Python 3):
+
+  ```bash
+  curl -fsSL https://carpinteromora.github.io/CancioneroUniversal/instalar.sh | bash
+  ```
+
+Queda funcionando en segundo plano (también después de reiniciar) y en el menú de aplicaciones.
+Luego vuelve a la página y pulsa **Reproducir**; si el navegador pide permiso para acceder a la
+red local, acéptalo.
+
+En Android y iPhone no se puede instalar: ahí los videos se abren en la app de YouTube.
+
+### Desde la carpeta descargada
+
+También puedes descargar el repositorio (botón **Code → Download ZIP**), descomprimirlo y abrir la
+app con `./iniciar-canciotras.sh` (Linux) o `iniciar-canciotras.bat` (Windows); necesita
 [Python 3](https://www.python.org/downloads/).
-
-1. Descarga el repositorio (botón **Code → Download ZIP**) y descomprímelo.
-2. Abre la app:
-   - **Linux:** `./iniciar-canciotras.sh`
-   - **Windows:** doble clic en `iniciar-canciotras.bat`
-
-La primera vez queda instalada en el menú de aplicaciones y se enciende sola cuando hace falta.
-Con el servidor instalado, la versión en línea también puede usar los audios de YouTube.
 
 También crea en el Escritorio la carpeta **Cancionero Universal**, donde se proponen guardar
 los archivos exportados.

@@ -1,0 +1,47 @@
+# Construye el instalador de Windows (no necesita Python) y lo publica en la Release «instalador»:
+# https://github.com/CarpinteroMora/CancioneroUniversal/releases/latest/download/CancioneroUniversal-Windows.exe
+name: Instalador de Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'servidor/**'
+      - 'js/**'
+      - 'css/**'
+      - 'index.html'
+      - 'vendor/**'
+      - '.github/workflows/instalador.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instalador
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Empaquetar
+        shell: bash
+        run: |
+          pip install pyinstaller
+          pyinstaller --onefile --noconsole --name CancioneroUniversal-Windows \
+            --add-data "index.html:." --add-data "css:css" --add-data "js:js" --add-data "vendor:vendor" \
+            servidor/canciotras_servidor.py
+      - name: Publicar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view instalador >/dev/null 2>&1 || gh release create instalador --latest \
+            --title "Instalador de Cancionero Universal" \
+            --notes "Instalador para Windows: descárgalo y ábrelo con doble clic. Linux y Mac: curl -fsSL https://carpinteromora.github.io/CancioneroUniversal/instalar.sh | bash"
+          gh release upload instalador dist/CancioneroUniversal-Windows.exe --clobber

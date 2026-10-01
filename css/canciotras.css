@@ -551,6 +551,15 @@ dialog h2 { font-size: 18px; margin-bottom: 12px; }
 .field input, .field select { padding: 8px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 14px; color: #202124; }
 .hint { font-size: 12px; color: #5f6368; }
 .field small { color: #80868b; }
+.field textarea { padding: 8px 10px; border: 1px solid #dadce0; border-radius: 6px; font: inherit; font-size: 14px; color: #202124; resize: vertical; }
+.support-copy { padding: 2px 10px; font-size: 12px; margin: 0 4px; }
+.support-form { background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 10px; padding: 4px 16px 12px; margin: 12px 0; }
+.support-check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #3c4043; margin-top: 4px; }
+.support-honey { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.support-sent { padding: 14px 0 6px; font-size: 15px; }
+.support-thanks { border-top: 1px solid #e8eaed; padding-top: 10px; }
+.support-thanks h3 { font-size: 15px; margin-bottom: 6px; }
+.support-names { columns: 2; margin: 6px 0 10px 18px; font-weight: 600; }
 .advanced { margin-top: 10px; font-size: 13px; color: #5f6368; }
 .advanced summary { cursor: pointer; user-select: none; }
 .modal-error { color: #d93025; font-size: 13px; min-height: 1em; margin-top: 6px; }

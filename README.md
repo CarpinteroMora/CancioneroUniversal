@@ -12,6 +12,13 @@ HTML, texto y Markdown.
 Funciona en cualquier navegador, también en el celular. Al abrirla por primera vez muestra un
 cancionero de ejemplo.
 
+## Ayúdanos a seguir trabajando
+
+Cancionero Universal es gratuito. Si te es útil y quieres colaborar económicamente para que sigamos
+desarrollándolo, escríbenos a **cancionerolitugico@gmail.com** (o desde la app: *Acerca de →
+Ayúdanos a seguir trabajando*) y te enviaremos nuestros datos para transferencias.
+¡Gracias, y que Dios les bendiga por su ayuda!
+
 ## Instalar la reproducción local (audios de YouTube)
 
 El navegador por sí solo no puede sacar el audio de YouTube, Vimeo, SoundCloud y otras páginas.

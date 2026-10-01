@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '3.7.0',
+  version: '3.8.0',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -281,6 +281,108 @@ function showAbout() {
   });
 }
 
+// ============ AYÚDANOS A SEGUIR TRABAJANDO ============
+// El formulario llega al correo por FormSubmit (sin cuenta: la primera vez envía un correo de activación).
+const CONTACT_FORM_URL = `https://formsubmit.co/ajax/${CONTACT_EMAIL}`;
+const CONTACT_REASONS = ['Quiero colaborar económicamente', 'Sugerencia o idea', 'Encontré un error', 'Otro'];
+
+function showSupport() {
+  const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Quiero colaborar con ' + APP_INFO.nombre)}`;
+  const thanks = COLABORADORES.length
+    ? `<ul class="support-names">${COLABORADORES.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
+    : '<p class="hint">Aquí aparecerán los nombres de quienes nos ayudan.</p>';
+  let sent = false;
+  showModal({
+    title: 'Ayúdanos a seguir trabajando',
+    wide: true,
+    body: `
+      <p>${escapeHtml(APP_INFO.nombre)} es gratuito y lo desarrollamos con mucho cariño para servir a las
+        comunidades, coros y músicos que animan la liturgia. Si te es útil, puedes
+        <b>colaborar económicamente</b> para que sigamos desarrollándolo: nuevas funciones, mejoras y mantenimiento.</p>
+      <p><b>¿Cómo colaborar?</b> Escríbenos con este formulario o al correo
+        <a href="${mailto}">${CONTACT_EMAIL}</a>
+        <button type="button" class="btn support-copy">Copiar correo</button>
+        y te enviaremos nuestros datos para transferencias.</p>
+      <div class="support-form">
+        <label class="field"><span>Nombre</span><input type="text" id="sName" autocomplete="name"></label>
+        <label class="field"><span>Correo <small>(para poder responderte)</small></span><input type="email" id="sEmail" autocomplete="email"></label>
+        <label class="field"><span>Motivo</span><select id="sReason">${CONTACT_REASONS.map(r => `<option>${r}</option>`).join('')}</select></label>
+        <label class="field"><span>Mensaje</span><textarea id="sMessage" rows="4" placeholder="Cuéntanos de dónde nos escribes y en qué te podemos ayudar"></textarea></label>
+        <label class="support-check"><input type="checkbox" id="sPublish"> Pueden publicar mi nombre en la lista de agradecimientos</label>
+        <input type="text" id="sHoney" class="support-honey" tabindex="-1" autocomplete="off" aria-hidden="true">
+      </div>
+      <div class="support-thanks">
+        <h3>Gracias a quienes nos ayudan</h3>
+        ${thanks}
+        <p>¡Muchas gracias por su generosidad! Pedimos que Dios les bendiga abundantemente por su ayuda. 🙏</p>
+      </div>`,
+    buttons: [
+      { label: 'Cerrar' },
+      {
+        label: 'Enviar', primary: true,
+        onClick: d => {
+          if (sent) return true;
+          const val = id => d.querySelector(id).value.trim();
+          const data = { nombre: val('#sName'), correo: val('#sEmail'), motivo: val('#sReason'), mensaje: val('#sMessage') };
+          if (!data.nombre) return modalFail(d, 'Escribe tu nombre.');
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.correo)) return modalFail(d, 'Escribe un correo válido para poder responderte.');
+          if (!data.mensaje && data.motivo !== CONTACT_REASONS[0]) return modalFail(d, 'Escribe tu mensaje.');
+          sendSupportForm(d, data, d.querySelector('#sPublish').checked, val('#sHoney')).then(ok => { sent = ok; });
+          return false;
+        }
+      }
+    ],
+    onOpen: d => {
+      d.querySelector('#sName').focus();
+      d.querySelector('.support-copy').onclick = async e => {
+        try { await navigator.clipboard.writeText(CONTACT_EMAIL); e.target.textContent = 'Copiado ✓'; } catch (_) {
+          e.target.textContent = CONTACT_EMAIL;
+        }
+      };
+    }
+  });
+}
+
+async function sendSupportForm(d, data, publish, honey) {
+  const btn = d.querySelector('.modal-actions .primary');
+  modalFail(d, '');
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  let ok = false;
+  try {
+    const r = await fetch(CONTACT_FORM_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        _subject: `${APP_INFO.nombre}: ${data.motivo} (${data.nombre})`,
+        _replyto: data.correo,
+        _template: 'table',
+        _honey: honey,
+        Nombre: data.nombre,
+        Correo: data.correo,
+        Motivo: data.motivo,
+        Mensaje: data.mensaje || '(sin mensaje)',
+        'Publicar su nombre en agradecimientos': publish ? 'Sí' : 'No',
+        'Versión de la app': APP_INFO.version
+      })
+    });
+    const res = await r.json().catch(() => ({}));
+    ok = r.ok && String(res.success) === 'true';
+  } catch (_) {}
+  btn.disabled = false;
+  if (ok) {
+    d.querySelector('.support-form').innerHTML = `<p class="support-sent">✅ ¡Gracias, ${escapeHtml(data.nombre)}! Recibimos tu mensaje
+      y te responderemos a <b>${escapeHtml(data.correo)}</b>${data.motivo === CONTACT_REASONS[0] ? ' con nuestros datos para transferencias' : ''}.</p>`;
+    btn.textContent = 'Cerrar';
+    return true;
+  }
+  btn.textContent = 'Enviar';
+  const body = `Nombre: ${data.nombre}\nCorreo: ${data.correo}\nMotivo: ${data.motivo}\n\n${data.mensaje}`;
+  d.querySelector('.modal-error').innerHTML = `No se pudo enviar desde aquí (¿sin internet?).
+    <a href="mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(data.motivo)}&body=${encodeURIComponent(body)}">Envíalo con tu correo</a>.`;
+  return false;
+}
+
 function showSyntax() {
   const rows = [
     ['Acordes (encima de la letra)', 'Sol      Re7     Sol\nNoche de paz...'],
@@ -423,6 +525,7 @@ const MENUS = [
   ]},
   { label: 'Acerca de', items: [
     { label: `Acerca de ${APP_INFO.nombre}…`, action: 'about' },
+    { label: 'Ayúdanos a seguir trabajando…', action: 'support' },
     { label: 'Guía de sintaxis', action: 'syntax' }
   ]}
 ];
@@ -501,6 +604,7 @@ const ACTIONS = {
   strumDialog,
 
   about: showAbout,
+  support: showSupport,
   syntax: showSyntax
 };
 

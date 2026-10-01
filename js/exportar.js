@@ -23,8 +23,6 @@ function chordVariants(line, key) {
 // Los audios van dentro del .html en "calidad liviana" (AAC mono, ~1,4 MB cada 4 minutos): suenan sin
 // internet en cualquier celular. El servidor local los comprime; si no puede, se usa el original.
 const EMBED_MAX_BYTES = 25 * 1024 * 1024;
-const audioPage = a => extractorPageOf(a.src) || (a.extractor ? a.src : null) ||
-  (a.kind === 'local' && !a.objectUrl && /^https?:\/\//i.test(a.origin || '') ? a.origin : null);
 const isDirectMedia = a => a.kind === 'url' && /^https?:\/\//i.test(a.src) && [...AUDIO_EXT, ...VIDEO_EXT].includes(mediaExt(a.src));
 const canEmbed = a => !!(a.objectUrl || audioPage(a) || isDirectMedia(a));
 

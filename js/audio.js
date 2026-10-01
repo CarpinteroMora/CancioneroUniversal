@@ -132,6 +132,11 @@ const audioPlayableSrc = a => a.objectUrl ||
 const audioLabel = a => (a.extractor ? '📺 ' : isVideoSrc(a.src) ? '🎬 ' : '') + a.name +
   (a.voice !== 'todas' && VOICES[a.voice] ? ` · ${VOICES[a.voice].label}` : '');
 
+// Sin el servidor del PC, estos audios se abren en su página (YouTube…) en vez de sonar aquí
+const needsServer = a => !a.objectUrl && !!audioPage(a) &&
+  (a.extractor || (a.viaOrigin && canUseOrigin(a)) || !!extractorPageOf(a.src));
+const serverReady = () => extractorAllowed() && extractorOnline !== false;
+
 function updateAudioBar() {
   const d = cur();
   const bar = $('#audioBar'), sel = $('#audioSelect'), player = $('#audioPlayer');
@@ -153,6 +158,24 @@ function updateAudioBar() {
     `<option value="${a.id}"${a.id === d.currentAudioId ? ' selected' : ''}>${escapeHtml(audioLabel(a))}</option>`).join('');
   const a = currentAudio(d);
   $('#relinkBtn').hidden = !(a.kind === 'local' && !a.objectUrl && canPickFiles);
+  const viaPage = needsServer(a);
+  if (viaPage && extractorAllowed()) {
+    const before = extractorOnline;
+    refreshExtractorOnline().then(ok => ok !== before && updateAudioBar());
+  }
+  const pageMode = viaPage && !serverReady();
+  bar.classList.toggle('page-mode', pageMode);
+  $('#pageBtn').hidden = !pageMode;
+  $('#pageHelp').hidden = !pageMode || isMobileDevice();
+  if (pageMode) {
+    $('#pageBtn').textContent = `▶ Escuchar en ${normalizeMediaUrl(audioPage(a)).streaming || 'su página'}`;
+    if (player.dataset.src) {
+      player.dataset.src = '';
+      player.removeAttribute('src');
+      player.load();
+    }
+    return;
+  }
   const src = audioPlayableSrc(a);
   if (player.dataset.src !== src) {
     player.dataset.src = src;
@@ -175,14 +198,17 @@ $('#audioPlayer').addEventListener('playing', () => {
 
 const reloadAudio = () => { $('#audioPlayer').dataset.src = ''; updateAudioBar(); };
 
+$('#pageBtn').addEventListener('click', () => openAudioPage(currentAudio()));
+$('#pageHelp').addEventListener('click', () => showExtractorSetup(reloadAudio));
+
 $('#audioPlayer').addEventListener('error', async () => {
   const a = currentAudio();
   if (!a || !$('#audioPlayer').dataset.src) return;
   const fromPage = a.extractor || (a.viaOrigin && canUseOrigin(a));
   if (fromPage && !a.objectUrl) {
     const page = a.extractor ? a.src : a.origin;
-    if (!await extractorStatus()) {
-      showExtractorSetup(reloadAudio);
+    if (!await refreshExtractorOnline(true)) {
+      updateAudioBar();
       return;
     }
     try {
@@ -333,8 +359,14 @@ async function addAudioFromUrl(url, { name = '', voice = 'todas' } = {}) {
     toast(`Listo: ${title}${info.duracion ? ` (${formatDuration(info.duracion)})` : ''}`, 4000);
   } catch (err) {
     toast('');
-    if (err.offline) showExtractorSetup(() => addAudioFromUrl(url, { name, voice }));
-    else toast(err.message, 7000);
+    if (!err.offline) { toast(err.message, 7000); return; }
+    const site = normalized.streaming || 'su página';
+    const title = name || (normalized.streaming ? `Video de ${normalized.streaming}` : 'Audio');
+    extractorOnline = false;
+    extractorCheckedAt = Date.now();
+    addAudio({ kind: 'url', src, name: title, voice, extractor: true }, true, d);
+    scheduleSave();
+    toast(`Listo: ${title}. Sin el servidor del PC se escuchará en ${site}.`, 6000);
   }
 }
 

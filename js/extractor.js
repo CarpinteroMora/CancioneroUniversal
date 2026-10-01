@@ -28,8 +28,39 @@ function extractorPageOf(uri) {
   try { return new URL(uri).searchParams.get('url'); } catch (_) { return null; }
 }
 
+// Página de origen de un audio que solo suena con el servidor (YouTube…), o null
+const audioPage = a => extractorPageOf(a.src) || (a.extractor ? a.src : null) ||
+  (a.kind === 'local' && !a.objectUrl && /^https?:\/\//i.test(a.origin || '') ? a.origin : null);
+
+// En la página web pública, preguntar por 127.0.0.1 hace que Chrome pida permiso de «red local»
+// a cada visitante: solo se consulta si el usuario lo pidió alguna vez y el servidor respondió.
+const ON_PUBLIC_WEB = location.protocol !== 'file:' && !/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname);
+const WEB_SERVER_KEY = 'canciotras-servidor-web';
+const extractorAllowed = () => !ON_PUBLIC_WEB || localStorage.getItem(WEB_SERVER_KEY) === '1';
+
+// Último resultado conocido (null = sin comprobar); se vuelve a mirar como máximo cada 30 s
+let extractorOnline = null, extractorCheckedAt = 0, extractorChecking = null;
+function refreshExtractorOnline(force = false) {
+  if (!force && extractorOnline !== null && Date.now() - extractorCheckedAt < 30000) return Promise.resolve(extractorOnline);
+  if (!extractorChecking) {
+    extractorChecking = extractorStatus().then(s => {
+      extractorOnline = !!s;
+      extractorCheckedAt = Date.now();
+      extractorChecking = null;
+      return extractorOnline;
+    });
+  }
+  return extractorChecking;
+}
+
+function openAudioPage(a) {
+  const url = a && audioPage(a);
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
 // El primer uso puede tardar unos segundos mientras el sistema enciende el servidor
 async function extractorStatus() {
+  if (!extractorAllowed()) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -47,6 +78,7 @@ async function extractorStatus() {
 async function extractorPrepare(src) {
   let r;
   try {
+    if (!extractorAllowed()) throw new Error('web');
     r = await fetch(`${extractorBase()}/api/preparar?${extractorQuery(src)}`, { cache: 'no-store' });
   } catch (_) {
     const err = new Error('Cancionero Universal no pudo conectarse con su reproductor de videos.');
@@ -74,17 +106,35 @@ const formatDuration = s => {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 };
 
-// Solo aparece si CancioTras nunca se abrió desde su icono (el primer arranque lo deja todo listo)
-function showExtractorSetup(retry) {
-  const win = /Windows/i.test(navigator.userAgent);
-  return showModal({
-    title: 'Un paso, solo la primera vez',
-    body: `
+const APP_DOWNLOAD_URL = 'https://github.com/CarpinteroMora/CancioneroUniversal/archive/refs/heads/main.zip';
+
+// Solo se abre a pedido («¿Escucharlo aquí mismo?»), nunca solo: sin servidor los videos se abren en su página
+async function showExtractorSetup(retry) {
+  const launcher = /Windows/i.test(navigator.userAgent) ? 'iniciar-canciotras.bat' : 'iniciar-canciotras.sh';
+  const v = await showModal({
+    title: 'Escuchar los videos dentro de la app',
+    body: ON_PUBLIC_WEB ? `
+      <p>En esta página web los videos de YouTube se abren en YouTube. Para escucharlos aquí mismo
+        (con su velocidad), instala Cancionero Universal en tu PC:</p>
+      <ol>
+        <li><a href="${APP_DOWNLOAD_URL}" target="_blank" rel="noopener">Descarga Cancionero Universal</a> y descomprímelo.</li>
+        <li>Ábrelo una vez con <b>${launcher}</b> (necesita <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3</a>).</li>
+        <li>Vuelve aquí y pulsa <b>Ya lo instalé</b>. Si el navegador pide permiso para acceder a la red local, acéptalo.</li>
+      </ol>` : `
       <p>Para escuchar videos de YouTube y otras páginas, abre Cancionero Universal una vez con
-        <b>${win ? 'iniciar-canciotras.bat' : 'iniciar-canciotras.sh'}</b> (está en la carpeta de la app).</p>
+        <b>${launcher}</b> (está en la carpeta de la app).</p>
       <p class="hint">Desde ese momento Cancionero Universal aparece en tu menú de aplicaciones y los videos suenan siempre, sin hacer nada más.</p>`,
-    buttons: [{ label: 'Ahora no' }, ...(retry ? [{ label: 'Listo, reintentar', primary: true, value: 'retry' }] : [])]
-  }).then(v => v === 'retry' && retry());
+    buttons: [{ label: 'Ahora no' }, { label: ON_PUBLIC_WEB ? 'Ya lo instalé' : 'Listo, reintentar', primary: true, value: 'retry' }]
+  });
+  if (v !== 'retry') return;
+  if (ON_PUBLIC_WEB) localStorage.setItem(WEB_SERVER_KEY, '1');
+  if (await refreshExtractorOnline(true)) {
+    updateAudioBar();
+    retry?.();
+    return;
+  }
+  if (ON_PUBLIC_WEB) localStorage.removeItem(WEB_SERVER_KEY);
+  toast(`Todavía no encuentro Cancionero Universal en este equipo. Ábrelo con ${launcher} y vuelve a probar.`, 7000);
 }
 
 // Guarda en disco el audio y lo deja vinculado como archivo local

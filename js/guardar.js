@@ -156,6 +156,7 @@ async function songsFolderDialog() {
 // ============ CARPETA PARA EXPORTAR ============
 // Solo sirve para que el diálogo «Guardar como» empiece ahí: igual se pregunta siempre.
 async function exportFolderPath() {
+  if (!extractorAllowed()) return '';
   try {
     const r = await fetch(`${extractorBase()}/api/carpeta-exportar`, { cache: 'no-store' });
     return r.ok ? (await r.json()).ruta || '' : '';

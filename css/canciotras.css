@@ -490,6 +490,14 @@ body.mode-atril .atril-controls { display: flex; }
   padding: 6px 12px; cursor: pointer; font-size: 13px; white-space: nowrap;
 }
 .relink-btn:hover { background: #d2e3fc; }
+.page-btn {
+  border: none; background: #c4302b; color: white; border-radius: 22px;
+  padding: 10px 20px; cursor: pointer; font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+.page-btn:hover { background: #a52722; }
+.page-help { border: none; background: none; color: #1a73e8; cursor: pointer; font-size: 13px; text-decoration: underline; white-space: nowrap; }
+.audio-bar.page-mode audio, .audio-bar.page-mode .speed { display: none; }
+.audio-bar.page-mode { justify-content: center; }
 .pick-row { display: flex; align-items: center; gap: 10px; }
 .speed { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .speed button { border: none; background: none; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 6px; }

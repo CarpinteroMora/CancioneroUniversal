@@ -360,7 +360,10 @@ async function sheetBytes(h) {
   let r = null;
   try { r = await fetch(h.src); } catch (_) {}
   if (!r?.ok) {
-    try { r = await fetch(hojaProxyUrl(h.src)); } catch (_) {
+    try {
+      if (!extractorAllowed()) throw new Error('web');
+      r = await fetch(hojaProxyUrl(h.src));
+    } catch (_) {
       throw new Error('esa página no deja leer el archivo y el reproductor de Cancionero Universal no responde');
     }
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no se pudo descargar');
@@ -377,7 +380,7 @@ async function drawSheet(h, host, opts) {
       host.innerHTML = `<img class="sheet-img" alt="${escapeHtml(h.name)}" src="${escapeHtml(src)}">`;
       const img = host.querySelector('img');
       img.onerror = () => {
-        if (h.kind === 'url' && !img.dataset.proxy) { img.dataset.proxy = '1'; img.src = hojaProxyUrl(h.src); }
+        if (h.kind === 'url' && !img.dataset.proxy && extractorAllowed()) { img.dataset.proxy = '1'; img.src = hojaProxyUrl(h.src); }
         else host.innerHTML = missingSheetHtml(h);
       };
     } else if (h.formato === 'pdf') {

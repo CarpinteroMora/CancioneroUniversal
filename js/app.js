@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '3.6.0',
+  version: '3.6.1',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -275,7 +275,8 @@ function showAbout() {
       </div></div>`,
     onOpen: d => extractorStatus().then(s => {
       const cell = d.querySelector('#aboutVideos');
-      if (cell) cell.textContent = s ? `Activo (yt-dlp ${s.ytdlp || '?'})` : 'Sin activar: abre una vez iniciar-canciotras';
+      if (cell) cell.textContent = s ? `Activo (yt-dlp ${s.ytdlp || '?'})`
+        : extractorAllowed() ? 'Sin activar: abre una vez iniciar-canciotras' : 'Se abren en YouTube (instala la app en el PC para escucharlos aquí)';
     })
   });
 }

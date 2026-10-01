@@ -1,0 +1,12 @@
+# yt-dlp y Deno: el servidor los descarga solo la primera vez
+servidor/bin/
+servidor/cache/
+__pycache__/
+*.log
+
+# Descargas usadas para preparar vendor/
+.descargas/
+
+# Copias viejas
+Documento sin título
+editor trasponedor (v1 respaldo).html

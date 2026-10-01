@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cancionero Universal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a73e8'/%3E%3Ctext x='16' y='24' font-size='22' text-anchor='middle' fill='white'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/canciotras.css">
+</head>
+<body class="mode-atril">
+
+<div class="chrome">
+  <header class="top-bar">
+    <div class="title-row">
+      <div class="logo" title="Cancionero Universal">♪</div>
+      <div class="title-col">
+        <div class="title-line">
+          <span class="brand">Cancionero Universal</span>
+          <input type="text" class="doc-title" id="docTitle" aria-label="Título de la canción">
+        </div>
+        <nav class="menubar" id="menubar" role="menubar"></nav>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <button data-action="undo" title="Deshacer (Ctrl+Z)">↶</button>
+    <button data-action="redo" title="Rehacer (Ctrl+Y)">↷</button>
+    <div class="separator edit-only"></div>
+    <button data-action="bold" class="edit-only" title="Negrita (Ctrl+B)"><b>N</b></button>
+    <button data-action="italic" class="edit-only" title="Cursiva (Ctrl+I)"><i>K</i></button>
+    <button data-action="underline" class="edit-only" title="Subrayado (Ctrl+U)"><u>S</u></button>
+    <button data-action="clearFormat" class="edit-only" title="Texto normal (Ctrl+\)">T<sub>x</sub></button>
+    <button data-action="comment" class="edit-only" title="Comentario (Ctrl+Alt+M)">💬</button>
+    <div class="separator"></div>
+    <button data-action="fontDown" title="Reducir letra">A−</button>
+    <button data-action="fontUp" title="Aumentar letra">A+</button>
+    <div class="separator"></div>
+    <button data-action="toggleNotation" id="btnNotation">🔤 Anglosajona</button>
+    <div class="mode-toggle">
+      <button id="btnEdit" data-action="modeEdit">✏️ Edición</button>
+      <button id="btnAtril" data-action="modeAtril">🎼 Atril</button>
+    </div>
+  </div>
+
+  <div class="transposer">
+    <span class="transposer-label">🎼 Tono:</span>
+    <div class="notes-container" id="notesContainer"></div>
+    <span class="key-info" id="keyInfo"></span>
+    <span class="notation-badge" id="notationBadge" data-action="toggleNotation" title="Cambiar notación">LATINA</span>
+  </div>
+
+  <div class="tabs" id="tabs" role="tablist" title="Doble clic en el espacio libre: nueva pestaña. Arrastra para ordenar."></div>
+</div>
+
+<div class="info-banner" id="infoBanner">
+  💡 Escribe los acordes en una línea sobre la letra (<code>Do Rem Sol7 Fa#m Sib</code> o <code>C Dm G7 F#m Bb</code>).
+  El <strong>tono se detecta con el primer acorde</strong>.
+  Comentarios: <code>&gt; texto</code> · Voces: <code>[Voz: Tenor]</code> · Formato: <code>**negrita**</code> <code>_cursiva_</code> <code>&lt;u&gt;subrayado&lt;/u&gt;</code>
+  <button class="banner-close" data-action="hideBanner" title="Ocultar">×</button>
+</div>
+
+<main class="doc-area">
+  <div class="workspace">
+    <div class="document" id="editorPane">
+      <div class="song-render" id="editHeader"></div>
+      <textarea id="editor" spellcheck="false" placeholder="Escribe aquí tu canción…&#10;&#10;Sol              Re7        Sol&#10;Noche de paz, noche de amor"></textarea>
+    </div>
+    <div class="document" id="viewPane">
+      <div id="viewMode" class="song-render"></div>
+    </div>
+    <aside id="sidePanel" class="side-panel" hidden aria-label="Panel de acordes">
+      <div class="panel-head">
+        <span>🎸 Acordes</span>
+        <button type="button" class="panel-close" data-action="togglePanel" title="Cerrar (Ctrl+Alt+P)">×</button>
+      </div>
+      <div id="panelBody"></div>
+    </aside>
+  </div>
+</main>
+
+<div id="printAll" class="print-all"></div>
+
+<div class="atril-controls">
+  <div class="view-switch" id="viewSwitch" hidden>
+    <button data-action="view:letra" title="Letra y acordes">Letra</button>
+    <button data-action="view:partitura" title="Partitura">Partitura</button>
+    <button data-action="view:tablatura" title="Tablatura">Tablatura</button>
+  </div>
+  <button data-action="togglePanel" title="Panel de acordes (Ctrl+Alt+P)">🎸</button>
+  <button data-action="fontDown" title="Reducir letra">A−</button>
+  <button data-action="fontUp" title="Aumentar letra">A+</button>
+  <button data-action="autoscroll" id="btnScroll" title="Desplazamiento automático (barra espaciadora)">▶ Desplazar</button>
+  <button data-action="scrollSlower" class="round" title="Más lento (tecla −)">−</button>
+  <input type="range" id="scrollSpeed" min="1" max="20" step="1" value="5" title="Velocidad del desplazamiento">
+  <button data-action="scrollFaster" class="round" title="Más rápido (tecla +)">+</button>
+  <span class="scroll-level" id="scrollLevel" title="Velocidad del desplazamiento de esta canción">5</span>
+</div>
+
+<div class="audio-bar" id="audioBar" hidden>
+  <select id="audioSelect" hidden title="Elegir audio"></select>
+  <button id="relinkBtn" class="relink-btn" data-action="relinkAudios" hidden title="El navegador pide permiso para leer tu carpeta de canciones">🔓 Activar audios de la carpeta</button>
+  <audio id="audioPlayer" controls preload="metadata"></audio>
+  <div class="speed" title="Velocidad de reproducción (el tono no cambia)">
+    <button id="speedDown" title="Más lento">🐢</button>
+    <input type="range" id="speedRange" min="0.25" max="1.5" step="0.05" value="1" aria-label="Velocidad">
+    <button id="speedUp" title="Más rápido">🐇</button>
+    <button id="speedLabel" class="speed-label" title="Volver a velocidad normal">1×</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<dialog id="modal"></dialog>
+<input type="file" id="fileOpen" multiple accept=".md,.markdown,.txt,.json,.m3u8,.m3u,.cho,.crd,.chopro,.chordpro,.pro,text/markdown,text/plain,application/json,audio/x-mpegurl" hidden>
+<input type="file" id="fileImport" accept=".txt,.md,.markdown,.cho,.crd,.chopro,.chordpro,.pro,text/markdown,text/plain" hidden>
+
+<!-- Scripts clásicos (no módulos) para que la app funcione también abriendo el archivo directamente -->
+<script src="js/acordes.js"></script>
+<script src="js/markdown.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/instrumentos.js"></script>
+<script src="js/rasgueos.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/extractor.js"></script>
+<script src="js/hojas.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/pestanas.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/cancionero.js"></script>
+  <script src="js/imprimir.js"></script>
+  <script src="js/etiquetas.js"></script>
+  <script src="js/exportar.js"></script>
+  <script src="js/zip.js"></script>
+  <script src="js/oficina.js"></script>
+<script src="js/ejemplo.js"></script>
+<script src="js/guardar.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -37,6 +37,26 @@ solo de cuecas o tonadas. Los tags de las canciones vienen de su .md; los de un 
 los de las canciones que lo usan, el género que traiga el archivo (mp3) y los que le pongas con 🏷️,
 que se guardan en `cancionero-etiquetas.json` dentro de esa carpeta para que viajen con ella.
 
+## Compartir por WhatsApp
+
+*Archivo → Compartir cancionero (WhatsApp)…* prepara el cancionero en versión **liviana**: letras, acordes,
+tags, instrumentos, rasgueos y los audios y partituras de internet (los archivos de tu equipo no viajan).
+Se puede enviar de dos formas:
+
+- **Archivo .html** (en WhatsApp, como Documento): se ve en cualquier navegador, con tono, modo noche y
+  desplazamiento, y trae el botón **«Editar en Cancionero Universal»**.
+- **Enlace**: al tocarlo se abre la app directamente con el cancionero.
+
+Quien lo recibe lo tiene en pestañas listas para editar; con *Archivo → Guardar cancionero* quedan las
+canciones (.md) y la lista (.m3u8) en su carpeta. El .html también se abre con *Archivo → Abrir*, y todas
+las páginas exportadas como .html traen el mismo botón para editarlas en la app.
+
+## Modo noche
+
+En el atril, el botón **🌙** (o *Ver → Modo noche*, Ctrl+Alt+D) pone fondo negro, letra blanca y acordes
+en amarillo, muy contrastados, para que la pantalla no deslumbre en un escenario. **☀️** vuelve al modo día.
+Las páginas HTML exportadas traen el mismo botón y recuerdan la elección.
+
 ## Grabar
 
 *Herramientas → Grabar…* abre una grabadora: canta o toca, detén y guarda. La toma queda como `.webm`

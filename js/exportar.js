@@ -143,14 +143,15 @@ ${audios ? `<div class="audios">${audios}</div>` : ''}
 }
 
 // ============ PÁGINA ============
-function buildAtrilHtml(list, { titulo = '', embedded = new Map() } = {}) {
+// share: { pkg, link } (compartir.js): la página lleva el cancionero para abrirlo y editarlo en la app
+function buildAtrilHtml(list, { titulo = '', embedded = new Map(), share = null } = {}) {
   const latin = isLatin();
   const book = list.length > 1 || !!titulo;
   const songs = list.map((d, i) => songExportData(d, i + 1, latin, embedded));
   const pageTitle = book ? (titulo || state.cancioneroName || 'Cancionero') : songs[0].title;
   const data = {
     book, notation: latin ? 'latin' : 'eng', font: Math.max(state.fontSize, 16),
-    comments: state.showComments, speeds: SCROLL_SPEEDS,
+    comments: state.showComments, night: state.night, speeds: SCROLL_SPEEDS,
     scroll: clampLevel(list[0].scrollSpeed || state.scrollSpeed), songs: songs.map(s => s.data)
   };
   const index = book ? `<header class="cover"><h1>${escapeHtml(pageTitle)}</h1><p>${songs.length} canciones</p></header>
@@ -170,9 +171,9 @@ function buildAtrilHtml(list, { titulo = '', embedded = new Map() } = {}) {
 <main>
 ${index}
 ${songs.map(s => s.html).join('\n')}
-<p class="foot">Hecho con ${escapeHtml(APP_INFO.nombre)}.<span class="nojs"> Si no ves los botones para cambiar el tono, abre este archivo con Chrome o Safari.</span></p>
+<p class="foot">${share ? `<a class="edit-app" href="${escapeHtml(share.link)}">✏️ Editar en ${escapeHtml(APP_INFO.nombre)}</a><br>` : ''}Hecho con ${escapeHtml(APP_INFO.nombre)}.<span class="nojs"> Si no ves los botones para cambiar el tono, abre este archivo con Chrome o Safari.</span></p>
 </main>
-<script>(${atrilRuntime.toString()})(${json});</script>
+${share ? `<script type="application/json" id="${SHARE_DATA_ID}">${JSON.stringify(share.pkg).replace(/</g, '\\u003c')}</script>\n` : ''}<script>(${atrilRuntime.toString()})(${json});</script>
 </body>
 </html>
 `;
@@ -257,7 +258,38 @@ body.has-player main { padding-bottom: calc(50vh + 70px); }
 .strum-svg { display: block; flex-shrink: 0; }
 body.no-chords .chord-line, body.no-chords .keys, body.no-keys .keys { display: none; }
 body.no-comments .comment-line { display: none; }
-.foot { text-align: center; font-size: 12px; color: #80868b; margin: 24px 0; }
+.foot { text-align: center; font-size: 12px; color: #80868b; margin: 24px 0; line-height: 2.4; }
+.edit-app { display: inline-block; font-size: 14px; font-weight: bold; text-decoration: none; padding: 6px 14px;
+  border: 1px solid #81c995; border-radius: 17px; background: #e6f4ea; color: #137333; line-height: 1.5; }
+.bar .edit-app { padding: 6px 12px; min-height: 34px; white-space: nowrap; }
+@media screen {
+  body.night { background: #000; color: #fff; }
+  body.night .bar { background: #111; border-color: #333; box-shadow: none; }
+  body.night .bar button, body.night .bar select, body.night .keys button, body.night .speed button { background: #000; border-color: #555; color: #fff; }
+  body.night .bar button.on, body.night .keys button.on { background: #fff; border-color: #fff; color: #000; }
+  body.night .keys button.sharp { background: #1a1400; border-color: #b38f00; }
+  body.night .keys .lbl, body.night .song-meta, body.night .strum-name, body.night .audio, body.night .cover p, body.night .index small { color: #bbb; }
+  body.night .bar .lv { color: #fff; }
+  body.night .cover h1 { color: #fff; }
+  body.night .index, body.night .song { background: #000; box-shadow: 0 0 0 1px #262626; }
+  body.night .index h2 { color: #9e9e9e; }
+  body.night .index a, body.night .section-heading { color: #8ab4f8; }
+  body.night .song-header { border-color: #333; }
+  body.night .line { color: #fff; }
+  body.night .chord-line, body.night .chord { color: #ffd400; }
+  body.night .chord-extra { color: #9e9e9e; }
+  body.night .comment-line { background: #1a1a1a; color: #e0e0e0; border-color: #b38f00; }
+  body.night .voice-section { background: color-mix(in srgb, var(--vc) 14%, #000); }
+  body.night .voice-section .lyric-line { color: color-mix(in srgb, var(--vc) 30%, #fff); }
+  body.night .strum-svg { filter: invert(1) hue-rotate(180deg); }
+  body.night .audio a, body.night .pchip { background: #10213a; border-color: #2d4a73; color: #aecbfa; }
+  body.night .pchip.on { background: #fff; border-color: #fff; color: #000; }
+  body.night .player { background: #111; border-color: #333; box-shadow: none; }
+  body.night .psel { color: #fff; background: #111; }
+  body.night .prow { color: #bbb; }
+  body.night .foot, body.night .note { color: #777; }
+  body.night .edit-app { background: #0d2616; border-color: #2e7d46; color: #81c995; }
+}
 @media (max-width: 600px) {
   main { padding: 8px 0 50vh; }
   .song { padding: 16px 12px; border-radius: 0; margin: 0 0 10px; }
@@ -294,9 +326,10 @@ function atrilRuntime(D) {
   try { saved = JSON.parse(localStorage.getItem('canciotras-html') || '{}'); } catch (_) {}
   const st = {
     n: saved.n || D.notation, f: saved.f || D.font, fit: window.innerWidth < 700,
-    chords: true, keys: !!saved.keys, comments: D.comments, voice: 'todas', lv: D.scroll, on: false
+    chords: true, keys: !!saved.keys, night: saved.night ?? !!D.night,
+    comments: D.comments, voice: 'todas', lv: D.scroll, on: false
   };
-  const remember = () => { try { localStorage.setItem('canciotras-html', JSON.stringify({ n: st.n, f: st.f, keys: st.keys })); } catch (_) {} };
+  const remember = () => { try { localStorage.setItem('canciotras-html', JSON.stringify({ n: st.n, f: st.f, keys: st.keys, night: st.night })); } catch (_) {} };
   $$('.nojs').forEach(n => n.remove());
 
   const songs = $$('.song').map((node, i) => ({ node, d: D.songs[i], key: D.songs[i].key ? D.songs[i].key.idx : null }));
@@ -466,7 +499,8 @@ function atrilRuntime(D) {
     hasChords ? '<div class="grp"><button data-a="notation" title="Cambiar la notación de los acordes"></button><button data-a="chords" class="on" title="Mostrar u ocultar los acordes">Acordes</button>' +
       '<button data-a="keys" title="Mostrar u ocultar los botones para cambiar el tono">🎼 Tono</button></div>' : '',
     '<div class="grp"><button data-a="smaller" title="Letra más chica">A−</button><button data-a="bigger" title="Letra más grande">A+</button>' +
-      '<button data-a="fit" title="Ajustar la letra al ancho de la pantalla">↔ Ajustar</button></div>',
+      '<button data-a="fit" title="Ajustar la letra al ancho de la pantalla">↔ Ajustar</button>' +
+      '<button data-a="night"></button></div>',
     hasComments ? '<div class="grp"><button data-a="comments" title="Mostrar u ocultar los comentarios">💬</button></div>' : '',
     voices.size ? `<div class="grp"><select data-voice title="Resaltar una voz"><option value="todas">🎤 Todas las voces</option>${Array.from(voices).map(([k, l]) =>
       `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select></div>` : '',
@@ -474,6 +508,15 @@ function atrilRuntime(D) {
       '<button data-a="slower" class="round" title="Más lento">−</button><input type="range" min="1" max="20" step="1" title="Velocidad del desplazamiento">' +
       '<button data-a="faster" class="round" title="Más rápido">+</button><span class="lv"></span></div>'
   ].join(''));
+  const editLink = document.querySelector('.foot .edit-app');
+  if (editLink) {
+    const a = el('a', 'edit-app', '✏️ Editar');
+    a.href = editLink.href;
+    a.title = editLink.textContent.replace(/^\S+\s/, '') + ' (abre el cancionero en la app para modificarlo y guardarlo)';
+    const g = el('div', 'grp');
+    g.append(a);
+    bar.prepend(g);
+  }
   document.body.prepend(bar);
   const playBtn = bar.querySelector('[data-a="play"]');
   const range = bar.querySelector('input[type=range]');
@@ -491,6 +534,11 @@ function atrilRuntime(D) {
     const chb = bar.querySelector('[data-a="chords"]');
     if (chb) chb.classList.toggle('on', st.chords);
     document.body.classList.toggle('no-keys', !st.keys);
+    document.body.classList.toggle('night', st.night);
+    document.documentElement.style.colorScheme = st.night ? 'dark' : '';
+    const nb2 = bar.querySelector('[data-a="night"]');
+    nb2.textContent = st.night ? '☀️' : '🌙';
+    nb2.title = st.night ? 'Modo día' : 'Modo noche: fondo negro y letra blanca, para el escenario';
     const kb = bar.querySelector('[data-a="keys"]');
     if (kb) { kb.classList.toggle('on', st.keys && st.chords); kb.disabled = !st.chords; }
   }
@@ -502,6 +550,7 @@ function atrilRuntime(D) {
     if (a === 'notation') { st.n = st.n === 'latin' ? 'eng' : 'latin'; songs.forEach(paint); }
     else if (a === 'chords') st.chords = !st.chords;
     else if (a === 'keys') st.keys = !st.keys;
+    else if (a === 'night') st.night = !st.night;
     else if (a === 'smaller') st.f = Math.max(10, st.f - 1);
     else if (a === 'bigger') st.f = Math.min(40, st.f + 1);
     else if (a === 'fit') st.fit = !st.fit;
@@ -581,7 +630,9 @@ async function saveAtrilHtml(list, name, titulo, withAudio) {
   if (!save) return;
   let embedded = new Map(), failed = 0;
   if (withAudio) ({ embedded, failed } = await collectEmbedded(list));
-  const html = new Blob([buildAtrilHtml(list, { titulo, embedded })], { type: 'text/html;charset=utf-8' });
+  const { pkg } = buildSharePackage(list, titulo || name);
+  const share = { pkg, link: await packToLink(pkg) };
+  const html = new Blob([buildAtrilHtml(list, { titulo, embedded, share })], { type: 'text/html;charset=utf-8' });
   const saved = await save(html);
   if (!saved) return;
   const size = html.size >= 1024 * 1024 ? `${(html.size / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(html.size / 1024))} KB`;

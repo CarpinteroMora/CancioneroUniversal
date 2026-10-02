@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.2.1',
+  version: '4.3.0',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -29,7 +29,8 @@ const state = {
   cancioneroPath: '',
   cancioneroClean: null,
   scrollSpeed: 5,
-  showPanel: false
+  showPanel: false,
+  night: false
 };
 let detectedKey = null;
 
@@ -91,6 +92,9 @@ function applyState() {
   const b = document.body.classList;
   b.toggle('hide-comments', !state.showComments);
   b.toggle('show-preview', state.showPreview);
+  b.toggle('night', state.night);
+  $('#btnNight').textContent = state.night ? '☀️' : '🌙';
+  $('#btnNight').title = state.night ? 'Modo día (Ctrl+Alt+D)' : 'Modo noche: fondo negro y letra blanca, para el escenario (Ctrl+Alt+D)';
   $('#infoBanner').hidden = state.bannerHidden;
   $('#btnNotation').textContent = isLatin() ? '🔤 Anglosajona' : '🔤 Latina';
   $('#notationBadge').textContent = isLatin() ? 'LATINA' : 'ANGLOSAJONA';
@@ -164,6 +168,7 @@ async function openFiles(items) {
   for (const { file: f, handle } of items) {
     if (/\.m3u8?$/i.test(f.name)) { await openM3u8(f, handle); continue; }
     const raw = await f.text();
+    if (/\.html?$/i.test(f.name)) { await openSharedPage(raw, f.name); continue; }
     if (/\.json$/i.test(f.name)) {
       let data = null;
       try { data = JSON.parse(raw); } catch (_) {}
@@ -182,7 +187,7 @@ async function openFiles(items) {
   if (opened) {
     toast(localAudios
       ? `${opened === 1 ? 'Canción abierta' : opened + ' canciones abiertas'}. ${canPickFiles ? 'Para escuchar sus audios pulsa "Activar audios de la carpeta".' : 'Si el audio no suena, vincúlalo en Herramientas → Vincular con audio o video local.'}`
-      : opened === 1 ? `Abierto "${files.find(f => !/\.(json|m3u8?)$/i.test(f.name)).name}"` : `${opened} canciones abiertas en pestañas`,
+      : opened === 1 ? `Abierto "${files.find(f => !/\.(json|m3u8?|html?)$/i.test(f.name)).name}"` : `${opened} canciones abiertas en pestañas`,
       localAudios ? 5000 : 2000);
   }
 }
@@ -434,6 +439,7 @@ const MENUS = [
     { label: 'Guardar cancionero (.m3u8)', action: 'saveBook', key: 'Ctrl+Alt+S' },
     { label: 'Guardar cancionero como…', action: 'saveBookAs' },
     { label: 'Abrir cancionero…', action: 'openBook' },
+    { label: 'Compartir cancionero (WhatsApp)…', action: 'shareBook' },
     { label: 'Imprimir cancionero…', action: 'printBook' },
     { label: 'Tríptico para la asamblea (solo letra)…', action: 'printTriptych' },
     { label: 'Exportar cancionero', submenu: [
@@ -485,6 +491,7 @@ const MENUS = [
     { label: 'Panel de acordes', action: 'togglePanel', check: () => state.showPanel, key: 'Ctrl+Alt+P' },
     { sep: true },
     { group: 'En el atril' },
+    { label: 'Modo noche (fondo negro)', action: 'toggleNight', check: () => state.night, key: 'Ctrl+Alt+D' },
     { label: 'Letra y acordes', action: 'view:letra', check: () => atrilView(cur()) === 'letra' },
     { label: 'Partitura', action: 'view:partitura', check: () => atrilView(cur()) === 'partitura', disabled: () => !cur().sheets.some(h => h.tipo === 'partitura') },
     { label: 'Tablatura', action: 'view:tablatura', check: () => atrilView(cur()) === 'tablatura', disabled: () => !cur().sheets.some(h => h.tipo === 'tablatura') },
@@ -553,6 +560,7 @@ const ACTIONS = {
   saveBook: () => saveCancioneroDialog(),
   saveBookAs: () => saveCancioneroDialog(true),
   openBook: openSongs,
+  shareBook: shareBookDialog,
   newBook: newBookDialog,
   openCollection,
   relinkAudios: activateFolderAudios,
@@ -587,6 +595,12 @@ const ACTIONS = {
   fullscreen: toggleFullscreen,
   toggleComments: () => { state.showComments = !state.showComments; applyState(); toast(state.showComments ? 'Comentarios visibles' : 'Comentarios ocultos', 1500); },
   togglePreview: () => { state.showPreview = !state.showPreview; applyState(); },
+  toggleNight: () => {
+    state.night = !state.night;
+    if (state.night && state.mode !== 'atril') setMode('atril');
+    applyState();
+    scheduleSave();
+  },
   toggleNotation: () => { state.notation = isLatin() ? 'eng' : 'latin'; applyState(); refresh(); },
   nextTab: () => cycleTab(1),
   prevTab: () => cycleTab(-1),
@@ -655,7 +669,7 @@ document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   let act = null;
   if (e.altKey) {
-    act = { KeyN: 'new', KeyO: 'openCollection', KeyW: 'closeTab', KeyM: 'comment', KeyS: 'saveBook', KeyP: 'togglePanel', KeyE: 'tagDialog', ArrowRight: 'nextTab', ArrowLeft: 'prevTab' }[e.code] || null;
+    act = { KeyN: 'new', KeyO: 'openCollection', KeyW: 'closeTab', KeyM: 'comment', KeyS: 'saveBook', KeyP: 'togglePanel', KeyE: 'tagDialog', KeyD: 'toggleNight', ArrowRight: 'nextTab', ArrowLeft: 'prevTab' }[e.code] || null;
   } else if (e.shiftKey) {
     act = { z: 'redo', f: 'fullscreen', s: 'saveAs' }[k] || null;
   } else {
@@ -692,8 +706,9 @@ function init() {
   activate(activeId);
   // Sesiones de versiones anteriores: lo abierto cuenta como el cancionero tal como está
   if (state.cancioneroClean == null) state.cancioneroClean = bookSignature();
-  // Primer inicio: se abre el cancionero de ejemplo
-  if (!restored) loadExample();
+  // Cancionero compartido por enlace; si no, en el primer inicio se abre el de ejemplo
+  if (location.hash.startsWith(SHARE_HASH)) openSharedFromHash();
+  else if (!restored) loadExample();
   relinkAll().then(() => refresh());
 }
 

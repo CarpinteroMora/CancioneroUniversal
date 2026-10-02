@@ -15,7 +15,8 @@ const OPEN_TYPES = [{
     'text/markdown': ['.md', '.markdown'],
     'text/plain': ['.txt', '.cho', '.crd', '.chopro', '.chordpro', '.pro'],
     'audio/x-mpegurl': ['.m3u8', '.m3u'],
-    'application/json': ['.json']
+    'application/json': ['.json'],
+    'text/html': ['.html', '.htm']
   }
 }];
 

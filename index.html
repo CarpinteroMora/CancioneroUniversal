@@ -122,6 +122,7 @@
   <button data-action="togglePanel" title="Panel de acordes (Ctrl+Alt+P)">🎸</button>
   <button data-action="fontDown" title="Reducir letra">A−</button>
   <button data-action="fontUp" title="Aumentar letra">A+</button>
+  <button data-action="toggleNight" id="btnNight" title="Modo noche">🌙</button>
   <button data-action="autoscroll" id="btnScroll" title="Desplazamiento automático (barra espaciadora)">▶ Desplazar</button>
   <button data-action="scrollSlower" class="round" title="Más lento (tecla −)">−</button>
   <input type="range" id="scrollSpeed" min="1" max="20" step="1" value="5" title="Velocidad del desplazamiento">
@@ -145,7 +146,7 @@
 
 <div class="toast" id="toast"></div>
 <dialog id="modal"></dialog>
-<input type="file" id="fileOpen" multiple accept=".md,.markdown,.txt,.json,.m3u8,.m3u,.cho,.crd,.chopro,.chordpro,.pro,text/markdown,text/plain,application/json,audio/x-mpegurl" hidden>
+<input type="file" id="fileOpen" multiple accept=".md,.markdown,.txt,.json,.m3u8,.m3u,.cho,.crd,.chopro,.chordpro,.pro,.html,.htm,text/markdown,text/plain,application/json,audio/x-mpegurl,text/html" hidden>
 <input type="file" id="fileImport" accept=".txt,.md,.markdown,.cho,.crd,.chopro,.chordpro,.pro,text/markdown,text/plain" hidden>
 
 <!-- Scripts clásicos (no módulos) para que la app funcione también abriendo el archivo directamente -->
@@ -169,6 +170,7 @@
   <script src="js/imprimir.js"></script>
   <script src="js/etiquetas.js"></script>
   <script src="js/exportar.js"></script>
+  <script src="js/compartir.js"></script>
   <script src="js/zip.js"></script>
   <script src="js/oficina.js"></script>
 <script src="js/ejemplo.js"></script>

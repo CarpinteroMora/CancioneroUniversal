@@ -222,12 +222,12 @@ const QUALITY_ALIASES = {
 };
 
 function canonQuality(q) {
-  const s = String(q || '').replace(/[()\s]/g, '').replace(/♯/g, '#').replace(/♭/g, 'b');
+  const s = String(q || '').replace(/[()\s\/,'*]/g, '').replace(/♯/g, '#').replace(/♭/g, 'b');
   if (s in QUALITY_TONES) return s;
   if (s in QUALITY_ALIASES) return QUALITY_ALIASES[s];
   const t = s.replace(/^(min|mi)(?!n)/, 'm').replace(/^-/, 'm')
     .replace(/[º°]/g, 'dim').replace(/ø7?/g, 'm7b5')
-    .replace(/7M|M7|Maj7|Δ7?|7\+(?!5)/, 'maj7').replace(/-5/, 'b5').replace(/\+5/, '#5');
+    .replace(/7M|M7|Maj7|Δ7?|\^7?|7\+(?!5)/, 'maj7').replace(/-5/, 'b5').replace(/\+5/, '#5');
   if (t in QUALITY_TONES) return t;
   if (t in QUALITY_ALIASES) return QUALITY_ALIASES[t];
   const minor = /^m(?!aj)/.test(t);
@@ -245,7 +245,7 @@ function chordSpec(core) {
   const c = parseChord(core);
   if (!c) return null;
   const root = noteIndex(c.root, c.acc);
-  const q = canonQuality(c.qual);
+  const q = canonQuality(c.mqual);
   const required = [], optional = [];
   for (const p of QUALITY_TONES[q].split(' ')) (p.endsWith('?') ? optional : required).push(mod12(root + parseInt(p, 10)));
   const bass = c.bass ? noteIndex(c.bass, c.bassAcc) : null;

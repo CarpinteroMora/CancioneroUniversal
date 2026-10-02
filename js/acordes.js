@@ -23,16 +23,23 @@ function spell(idx, flats, latin) {
 }
 
 // ============ DETECCIÓN DE ACORDES ============
-const ROOT_SRC = '(Do|Re|Mi|Fa|Sol|La|Si|DO|RE|MI|FA|SOL|LA|SI|[A-G])';
+// La nota en minúscula indica acorde menor: «la» = Lam, «e7» = Em7
+const ROOT_SRC = '(Do|Re|Mi|Fa|Sol|La|Si|DO|RE|MI|FA|SOL|LA|SI|do|re|mi|fa|sol|la|si|[A-G]|[a-g])';
 const ACC_SRC = '(#|b|♯|♭)?';
-const QUAL_SRC = '((?:maj|min|dim|aug|sus|add|m|M|º|°|ø|\\+|-|[0-9]|#|b|♯|♭|\\(|\\))*)';
+const QUAL_SRC = "((?:maj|min|dim|aug|sus|add|alt|omit|m|M|º|°|ø|Δ|\\^|\\+|-|'|\\*|[0-9]|#|b|♯|♭|\\(|\\)|,|\\/(?=[0-9#b♯♭]))*)";
 const CHORD_RE = new RegExp(`^${ROOT_SRC}${ACC_SRC}${QUAL_SRC}(?:\\/${ROOT_SRC}${ACC_SRC})?$`);
 const NEUTRAL_TOKEN = /^(\|+:?|:?\|+|-+|\/+|\.{2,}|%|x\d+|\(x?\d+x?\)|\(?bis\)?|.+:)$/i;
 
+const isLowerRoot = root => root === root.toLowerCase();
+const isMinorQuality = q => /^(m(?!aj)|min|-)/.test(q);
+
+// qual: tal como está escrito; mqual: con la «m» que implica la minúscula (para tono y diagramas)
 function parseChord(core) {
   const m = core.match(CHORD_RE);
   if (!m) return null;
-  return { root: m[1], acc: m[2] || '', qual: m[3] || '', bass: m[4] || '', bassAcc: m[5] || '' };
+  const qual = m[3] || '';
+  const minor = isLowerRoot(m[1]) && !isMinorQuality(qual);
+  return { root: m[1], acc: m[2] || '', qual, mqual: minor ? 'm' + qual : qual, bass: m[4] || '', bassAcc: m[5] || '' };
 }
 
 function splitPunct(tok) {
@@ -46,7 +53,7 @@ function isChordToken(tok) {
 }
 
 function noteIndex(root, acc) {
-  const r = root.length > 1 ? root[0] + root.slice(1).toLowerCase() : root;
+  const r = root[0].toUpperCase() + root.slice(1).toLowerCase();
   let i = NATURAL_INDEX[r];
   if (acc === '#' || acc === '♯') i++;
   else if (acc === 'b' || acc === '♭') i--;
@@ -54,13 +61,16 @@ function noteIndex(root, acc) {
 }
 
 // Reescribe una nota: transpuesta `semis` y/o en otra notación, conservando mayúsculas (DO, SOL…)
+// y minúsculas (la, e: acordes menores)
 function renderNote(root, acc, semis, flats, targetLatin) {
   const srcLatin = root.length > 1;
   const latin = targetLatin ?? srcLatin;
   if (semis === 0 && latin === srcLatin) return root + acc;
   const useFlats = flats ?? /b|♭/.test(acc);
   let name = spell(noteIndex(root, acc) + semis, useFlats, latin);
-  if (srcLatin && latin && root === root.toUpperCase()) {
+  if (isLowerRoot(root)) {
+    name = name.toLowerCase();
+  } else if (srcLatin && latin && root === root.toUpperCase()) {
     name = name.replace(/^(Do|Re|Mi|Fa|Sol|La|Si)/, s => s.toUpperCase());
   }
   return name;
@@ -83,8 +93,6 @@ function convertTokenNotation(tok, targetLatin) {
     renderNote(c.root, c.acc, 0, null, targetLatin) + c.qual +
     (c.bass ? '/' + renderNote(c.bass, c.bassAcc, 0, null, targetLatin) : ''));
 }
-
-const isMinorQuality = q => /^(m(?!aj)|min|-)/.test(q);
 
 // ============ VOCES ============
 const VOICES = {
@@ -154,8 +162,11 @@ function isChordLine(line) {
     if (isChordToken(tok)) chords++;
     else if (!NEUTRAL_TOKEN.test(tok)) others++;
   }
-  return chords > 0 && chords / (chords + others) >= 0.7;
+  return chords > 0 && chords / (chords + others) >= 0.7 && !SUNG_SYLLABLES_RE.test(line);
 }
+
+// «la la la», «mi, mi»: sílabas cantadas (la misma nota en minúscula repetida con un solo espacio)
+const SUNG_SYLLABLES_RE = /(?:^|\s)(do|re|mi|fa|sol|la|si|[a-g])[,.;!?]* \1(?=[\s,.;!?]|$)/;
 
 // ============ TRANSPOSICIÓN ============
 // Recoloca los tokens de una línea de acordes en sus columnas originales,
@@ -191,7 +202,7 @@ function detectKey(text) {
     for (const tok of line.trim().split(/\s+/)) {
       const core = splitPunct(tok)[1];
       const c = core && parseChord(core);
-      if (c) return { idx: noteIndex(c.root, c.acc), minor: isMinorQuality(c.qual), chord: core };
+      if (c) return { idx: noteIndex(c.root, c.acc), minor: isMinorQuality(c.mqual), chord: core };
     }
   }
   return null;

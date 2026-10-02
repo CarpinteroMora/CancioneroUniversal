@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.1.0',
+  version: '4.1.1',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -390,6 +390,8 @@ async function sendSupportForm(d, data, publish, honey) {
 function showSyntax() {
   const rows = [
     ['Acordes (encima de la letra)', 'Sol      Re7     Sol\nNoche de paz...'],
+    ['Acorde menor en minúscula', 'la = Lam · re7 = Rem7 · e = Em'],
+    ['Números y símbolos', 'Sol7  Re7/9  La6/9  Do7(9,11)  Fa#m7(b5)  Mi°  Sol+  DoΔ'],
     ['Tono', 'Se detecta con el primer acorde de la canción'],
     ['Título de sección', '## Coro'],
     ['Comentario', '> Repetir dos veces'],

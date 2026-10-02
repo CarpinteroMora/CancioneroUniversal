@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.2.0',
+  version: '4.2.1',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };

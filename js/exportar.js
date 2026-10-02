@@ -126,8 +126,7 @@ function songExportData(d, n, latin, embedded) {
   ].join('');
   const html = `<article class="song" id="c${n}">
 <header class="song-header"><div class="song-title">${escapeHtml(title)}</div>
-<div class="song-meta">${key ? `Tono: <strong class="key-label">${escapeHtml(keyLabel(key, latin))}</strong>` : '&nbsp;'}</div>
-${d.tags?.length ? `<div class="song-tags">${d.tags.map(t => tagChip(t)).join('')}</div>` : ''}</header>
+<div class="song-meta">${key ? `Tono: <strong class="key-label">${escapeHtml(keyLabel(key, latin))}</strong>` : '&nbsp;'}</div></header>
 ${audios ? `<div class="audios">${audios}</div>` : ''}
 <div class="song-body">${body || '<div class="line blank">&nbsp;</div>'}</div>
 </article>`;
@@ -189,6 +188,7 @@ body { margin: 0; background: #eef1f5; color: #202124; font-family: Arial, sans-
 .bar button, .bar select, .keys button { font: inherit; font-size: 14px; min-height: 34px; padding: 4px 10px;
   border: 1px solid #dadce0; border-radius: 17px; background: #fff; color: #202124; cursor: pointer; }
 .bar button.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.bar button:disabled { opacity: .45; cursor: default; }
 .bar button.round { width: 34px; padding: 0; font-size: 18px; line-height: 1; }
 .bar input[type=range] { width: 90px; accent-color: #1a73e8; }
 .bar .lv { min-width: 1.4em; text-align: center; font-weight: bold; color: #1a73e8; }
@@ -207,9 +207,6 @@ main { max-width: 860px; margin: 0 auto; padding: 14px 10px 50vh; }
 .song-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
 .song-title { font-size: 1.6em; font-weight: bold; }
 .song-meta { font-size: .9em; color: #5f6368; margin-top: 4px; }
-.song-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.tag-chip { display: inline-flex; padding: 2px 9px; border-radius: 12px; background: #e8f0fe; color: #1967d2; font-size: 12px; line-height: 1.5; }
-.tag-chip.fam { background: #fce8b2; color: #7a4f01; font-weight: bold; }
 .keys { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: -4px 0 12px; }
 .keys .lbl { font-size: 13px; color: #5f6368; margin-right: 2px; }
 .keys button { min-width: 38px; padding: 2px 6px; font-size: 13px; }
@@ -258,7 +255,7 @@ body.has-player main { padding-bottom: calc(50vh + 70px); }
 .strum-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; white-space: normal; margin: 6px 0; font-family: Arial, sans-serif; }
 .strum-name { font-size: .85em; font-weight: bold; color: #5f6368; }
 .strum-svg { display: block; flex-shrink: 0; }
-body.no-chords .chord-line, body.no-chords .keys { display: none; }
+body.no-chords .chord-line, body.no-chords .keys, body.no-keys .keys { display: none; }
 body.no-comments .comment-line { display: none; }
 .foot { text-align: center; font-size: 12px; color: #80868b; margin: 24px 0; }
 @media (max-width: 600px) {
@@ -297,9 +294,9 @@ function atrilRuntime(D) {
   try { saved = JSON.parse(localStorage.getItem('canciotras-html') || '{}'); } catch (_) {}
   const st = {
     n: saved.n || D.notation, f: saved.f || D.font, fit: window.innerWidth < 700,
-    chords: true, comments: D.comments, voice: 'todas', lv: D.scroll, on: false
+    chords: true, keys: !!saved.keys, comments: D.comments, voice: 'todas', lv: D.scroll, on: false
   };
-  const remember = () => { try { localStorage.setItem('canciotras-html', JSON.stringify({ n: st.n, f: st.f })); } catch (_) {} };
+  const remember = () => { try { localStorage.setItem('canciotras-html', JSON.stringify({ n: st.n, f: st.f, keys: st.keys })); } catch (_) {} };
   $$('.nojs').forEach(n => n.remove());
 
   const songs = $$('.song').map((node, i) => ({ node, d: D.songs[i], key: D.songs[i].key ? D.songs[i].key.idx : null }));
@@ -466,7 +463,8 @@ function atrilRuntime(D) {
   const bar = el('div', 'bar', [
     D.book ? `<div class="grp"><select data-go title="Ir a una canción"><option value="">☰ Canciones…</option>${songs.map((s, i) =>
       `<option value="c${i + 1}">${i + 1}. ${esc(s.node.querySelector('.song-title').textContent)}</option>`).join('')}</select></div>` : '',
-    hasChords ? '<div class="grp"><button data-a="notation" title="Cambiar la notación de los acordes"></button><button data-a="chords" class="on" title="Mostrar u ocultar los acordes">Acordes</button></div>' : '',
+    hasChords ? '<div class="grp"><button data-a="notation" title="Cambiar la notación de los acordes"></button><button data-a="chords" class="on" title="Mostrar u ocultar los acordes">Acordes</button>' +
+      '<button data-a="keys" title="Mostrar u ocultar los botones para cambiar el tono">🎼 Tono</button></div>' : '',
     '<div class="grp"><button data-a="smaller" title="Letra más chica">A−</button><button data-a="bigger" title="Letra más grande">A+</button>' +
       '<button data-a="fit" title="Ajustar la letra al ancho de la pantalla">↔ Ajustar</button></div>',
     hasComments ? '<div class="grp"><button data-a="comments" title="Mostrar u ocultar los comentarios">💬</button></div>' : '',
@@ -492,6 +490,9 @@ function atrilRuntime(D) {
     document.body.classList.toggle('no-chords', !st.chords);
     const chb = bar.querySelector('[data-a="chords"]');
     if (chb) chb.classList.toggle('on', st.chords);
+    document.body.classList.toggle('no-keys', !st.keys);
+    const kb = bar.querySelector('[data-a="keys"]');
+    if (kb) { kb.classList.toggle('on', st.keys && st.chords); kb.disabled = !st.chords; }
   }
 
   bar.addEventListener('click', e => {
@@ -500,6 +501,7 @@ function atrilRuntime(D) {
     const a = b.dataset.a;
     if (a === 'notation') { st.n = st.n === 'latin' ? 'eng' : 'latin'; songs.forEach(paint); }
     else if (a === 'chords') st.chords = !st.chords;
+    else if (a === 'keys') st.keys = !st.keys;
     else if (a === 'smaller') st.f = Math.max(10, st.f - 1);
     else if (a === 'bigger') st.f = Math.min(40, st.f + 1);
     else if (a === 'fit') st.fit = !st.fit;

@@ -2,7 +2,7 @@
 // Cancionero Universal sin conexión: con internet siempre se carga la versión más nueva
 // (y se guarda una copia); sin internet, o si la red tarda, se usa la copia guardada.
 
-const CACHE = 'cancionero-4.2.0';
+const CACHE = 'cancionero-4.2.1';
 const NET_TIMEOUT = 3000;
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/canciotras.css',

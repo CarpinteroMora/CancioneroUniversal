@@ -1,14 +1,13 @@
 'use strict';
 // Compartir un cancionero (por WhatsApp u otro medio). Va liviano: solo texto. Cada canción viaja
 // como su .md (letra, acordes, tags, instrumentos, rasgueos…) con los audios y hojas de internet;
-// los archivos del equipo se quedan. Dos formas de enviarlo:
-//  - página .html (la del atril) con los datos adentro y un botón «Editar en Cancionero Universal»
-//  - enlace a la app: WEB_APP_URL#cancionero=<datos comprimidos>
+// los archivos del equipo se quedan. Se envía una página .html (la del atril) con los datos adentro y
+// un botón «Editar en Cancionero Universal», que abre la app con WEB_APP_URL#cancionero=<datos>.
+// Ese enlace va dentro del archivo: enviado como mensaje, WhatsApp lo cortaría.
 // Quien lo recibe lo abre en pestañas sin guardar y lo guarda en su carpeta con Guardar cancionero.
 
 const SHARE_FORMAT = 'cancionero-compartido';
 const SHARE_HASH = '#cancionero=';
-const SHARE_LINK_MAX = 60000;        // WhatsApp corta los mensajes de más de ~65.000 caracteres
 const SHARE_MAX_SONGS = 300;
 const SHARE_MAX_BYTES = 5 * 1024 * 1024;
 const SHARE_DATA_ID = 'cancionero-datos';
@@ -171,84 +170,102 @@ async function openSharedPage(html, name) {
 // ============ ENVIAR ============
 const fmtSize = bytes => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-async function copyLink(link) {
-  try {
-    await navigator.clipboard.writeText(link);
-  } catch (_) {
-    const ta = el('textarea');
-    ta.value = link;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    ta.remove();
-  }
-  toast('Enlace copiado: pégalo en WhatsApp', 3000);
-}
-
-async function shareBookDialog() {
-  syncFromEditor();
-  const songs = docs.filter(d => !isBlank(d));
-  if (!songs.length) { toast('No hay canciones abiertas para compartir'); return; }
-  const res = await showModal({
-    title: 'Compartir cancionero',
-    body: `${bookPickerHtml(songs)}
-      <p class="hint">Va <b>liviano</b>, para enviarlo por WhatsApp: letras, acordes, tags, instrumentos, rasgueos y los
-        audios y partituras de internet. Quien lo recibe lo abre en Cancionero Universal y puede editarlo y guardarlo.</p>`,
-    onOpen: bookPickerOpen,
-    buttons: [{ label: 'Cancelar' }, { label: 'Preparar', primary: true, onClick: dlg => bookPickerRead(dlg, songs) }]
-  });
-  if (!res) return;
-
-  const { titulo, chosen } = res;
+async function prepareShareFile(titulo, chosen) {
   const { pkg, leftAudios, leftSheets } = buildSharePackage(chosen, titulo);
   const link = await packToLink(pkg);
   const html = new Blob([buildAtrilHtml(chosen, { titulo: chosen.length > 1 ? titulo : '', share: { pkg, link } })], { type: 'text/html' });
   const fileName = safeFileName(titulo) + '.html';
-  const file = new File([html], fileName, { type: 'text/html' });
-  let canShareFile = false;
-  try { canShareFile = !!navigator.canShare?.({ files: [file] }); } catch (_) {}
-  const linkOk = link.length <= SHARE_LINK_MAX;
-  const n = chosen.length;
-  const msg = `Cancionero «${titulo}» (${n} ${n === 1 ? 'canción' : 'canciones'}) para abrir y editar en ${APP_INFO.nombre}`;
-  const left = [leftAudios && `${leftAudios === 1 ? '1 audio' : leftAudios + ' audios'}`, leftSheets && `${leftSheets === 1 ? '1 partitura' : leftSheets + ' partituras'}`].filter(Boolean);
+  return { titulo, n: chosen.length, html, fileName, file: new File([html], fileName, { type: 'text/html' }), leftAudios, leftSheets };
+}
 
-  const sendFile = () => {
-    if (canShareFile) {
-      navigator.share({ files: [file], title: titulo, text: msg }).catch(() => {});
-      return false;
-    }
-    pickSaveTarget(fileName, 'text/html', '.html', 'Página web').then(async save => {
-      const saved = save && await save(html);
-      if (saved) toast(`Guardado «${saved}». En WhatsApp adjúntalo como Documento.`, 7000);
+function shareSummaryHtml(r) {
+  const left = [r.leftAudios && (r.leftAudios === 1 ? '1 audio' : r.leftAudios + ' audios'),
+    r.leftSheets && (r.leftSheets === 1 ? '1 partitura' : r.leftSheets + ' partituras')].filter(Boolean);
+  return `Archivo «${escapeHtml(r.fileName)}» de ${fmtSize(r.html.size)} · ${r.n} ${r.n === 1 ? 'canción' : 'canciones'}.` +
+    (left.length ? `<br>${left.join(' y ')} de tu equipo no ${r.leftAudios + r.leftSheets > 1 ? 'viajan' : 'viaja'}: los de internet sí.` : '');
+}
+
+// navigator.share con archivos solo funciona justo después del toque: el .html se prepara antes,
+// cada vez que cambia el título o las canciones, para que al tocar «Enviar» ya esté listo.
+async function shareBookDialog() {
+  syncFromEditor();
+  const songs = docs.filter(d => !isBlank(d));
+  if (!songs.length) { toast('No hay canciones abiertas para compartir'); return; }
+  let canShareFiles = false;
+  try { canShareFiles = !!navigator.canShare?.({ files: [new File(['<html>'], 'cancionero.html', { type: 'text/html' })] }); } catch (_) {}
+
+  let ready = null, preparing = null, seq = 0, timer = 0, closed = false;
+  const prepare = dlg => {
+    clearTimeout(timer);
+    const my = ++seq;
+    ready = null;
+    preparing = null;
+    const info = dlg.querySelector('.share-info');
+    const titulo = dlg.querySelector('#xTitle').value.trim();
+    const chosen = [...dlg.querySelectorAll('.export-list input:checked')].map(c => songs[+c.dataset.i]);
+    if (!titulo || !chosen.length) { info.textContent = ''; return; }
+    info.textContent = 'Preparando el archivo…';
+    preparing = prepareShareFile(titulo, chosen).then(r => {
+      if (my === seq) { ready = r; info.innerHTML = shareSummaryHtml(r); }
+      return r;
+    }, e => {
+      if (my === seq) info.textContent = 'No se pudo preparar: ' + e.message;
+      throw e;
     });
-    return false;
+    preparing.catch(() => {});
   };
-  const sendLink = () => {
-    if (navigator.share) navigator.share({ title: titulo, text: msg, url: link }).catch(() => {});
-    else copyLink(link);
+
+  const deliver = (dlg, r) => {
+    if (closed) return;
+    const msg = `Cancionero «${r.titulo}» (${r.n} ${r.n === 1 ? 'canción' : 'canciones'}) para abrir y editar en ${APP_INFO.nombre}`;
+    if (canShareFiles) {
+      return navigator.share({ files: [r.file], title: r.titulo, text: msg }).then(() => dlg.close(), e => {
+        if (e.name === 'AbortError') return;
+        if (e.name === 'NotAllowedError') modalFail(dlg, 'El archivo ya está listo: vuelve a tocar «Enviar por WhatsApp».');
+        else modalFail(dlg, 'No se pudo compartir: ' + e.message);
+      });
+    }
+    return pickSaveTarget(r.fileName, 'text/html', '.html', 'Página web').then(async save => {
+      const saved = save && await save(r.html);
+      if (!saved) return;
+      dlg.close();
+      toast(`Guardado «${saved}». En WhatsApp adjúntalo como Documento.`, 7000);
+    });
+  };
+
+  const send = dlg => {
+    if (!bookPickerRead(dlg, songs)) return false;
+    modalFail(dlg, '');
+    if (ready) deliver(dlg, ready);
+    else {
+      if (!preparing) prepare(dlg);
+      preparing.then(r => deliver(dlg, r), () => {});
+    }
     return false;
   };
 
   await showModal({
     title: 'Compartir cancionero',
-    body: `<p><b>«${escapeHtml(titulo)}»</b>: ${n} ${n === 1 ? 'canción' : 'canciones'}.
-        Archivo de ${fmtSize(html.size)} · enlace de ${link.length.toLocaleString('es')} caracteres.</p>
-      ${left.length ? `<p class="hint">${left.join(' y ')} de tu equipo no ${leftAudios + leftSheets > 1 ? 'viajan' : 'viaja'}: los enlaces de internet sí.</p>` : ''}
-      <ul class="share-ways">
-        <li><b>Archivo:</b> se ve en cualquier navegador, con tono, modo noche y desplazamiento, y trae el botón
-          «Editar en Cancionero Universal». En WhatsApp va como <b>Documento</b>.</li>
-        <li><b>Enlace:</b> al tocarlo se abre la app directamente con el cancionero.
-          ${linkOk ? '' : '<br><b class="share-warn">Es muy largo para un enlace: envía el archivo.</b>'}</li>
-      </ul>`,
+    body: `${bookPickerHtml(songs)}
+      <p class="hint">Va <b>liviano</b>: letras, acordes, tags, instrumentos, rasgueos y los audios y partituras de internet.
+        Se envía un archivo <b>.html</b> (en WhatsApp llega como <b>Documento</b>) que se ve en cualquier navegador y trae
+        el botón «Editar en ${APP_INFO.nombre}» para abrirlo en la app, editarlo y guardarlo.</p>
+      <p class="hint share-info"></p>`,
     onOpen: dlg => {
-      if (linkOk) return;
-      dlg.querySelectorAll('.modal-actions .btn').forEach(b => { if (/enlace/i.test(b.textContent)) b.disabled = true; });
+      bookPickerOpen(dlg);
+      const form = dlg.querySelector('form');
+      form.querySelector('#xTitle').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => prepare(dlg), 400); });
+      form.addEventListener('change', e => { if (e.target.matches('.export-list input')) prepare(dlg); });
+      form.querySelector('#xAll').addEventListener('click', () => prepare(dlg));
+      form.querySelector('#xNone').addEventListener('click', () => prepare(dlg));
+      prepare(dlg);
     },
     buttons: [
-      { label: 'Cerrar' },
-      { label: 'Copiar enlace', onClick: () => { if (linkOk) copyLink(link); return false; } },
-      { label: 'Enviar enlace', onClick: () => linkOk ? sendLink() : false },
-      { label: canShareFile ? 'Enviar archivo…' : 'Guardar archivo…', primary: true, onClick: sendFile }
+      { label: 'Cancelar' },
+      { label: canShareFiles ? 'Enviar por WhatsApp…' : 'Guardar archivo…', primary: true, onClick: send }
     ]
   });
+  closed = true;
+  clearTimeout(timer);
+  seq++;
 }

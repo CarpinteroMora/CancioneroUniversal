@@ -41,11 +41,13 @@ que se guardan en `cancionero-etiquetas.json` dentro de esa carpeta para que via
 
 *Archivo → Compartir cancionero (WhatsApp)…* prepara el cancionero en versión **liviana**: letras, acordes,
 tags, instrumentos, rasgueos y los audios y partituras de internet (los archivos de tu equipo no viajan).
-Se puede enviar de dos formas:
+Mientras eliges el título y las canciones, el archivo **.html** se va armando solo; al tocar
+**Enviar por WhatsApp…** se abre el menú de compartir del teléfono con el archivo listo (en un computador
+el botón es **Guardar archivo…**, y luego se adjunta en WhatsApp como **Documento**).
 
-- **Archivo .html** (en WhatsApp, como Documento): se ve en cualquier navegador, con tono, modo noche y
-  desplazamiento, y trae el botón **«Editar en Cancionero Universal»**.
-- **Enlace**: al tocarlo se abre la app directamente con el cancionero.
+El .html se ve en cualquier navegador, con tono, modo noche y desplazamiento, y trae el botón
+**«Editar en Cancionero Universal»**, que abre la app con el cancionero. No se envía como enlace suelto
+porque WhatsApp corta los mensajes muy largos.
 
 Quien lo recibe lo tiene en pestañas listas para editar; con *Archivo → Guardar cancionero* quedan las
 canciones (.md) y la lista (.m3u8) en su carpeta. El .html también se abre con *Archivo → Abrir*, y todas

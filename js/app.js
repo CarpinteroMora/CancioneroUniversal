@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.3.0',
+  version: '4.3.1',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -706,7 +706,7 @@ function init() {
   activate(activeId);
   // Sesiones de versiones anteriores: lo abierto cuenta como el cancionero tal como está
   if (state.cancioneroClean == null) state.cancioneroClean = bookSignature();
-  // Cancionero compartido por enlace; si no, en el primer inicio se abre el de ejemplo
+  // Cancionero que llega del botón «Editar» de un .html compartido; si no, en el primer inicio se abre el de ejemplo
   if (location.hash.startsWith(SHARE_HASH)) openSharedFromHash();
   else if (!restored) loadExample();
   relinkAll().then(() => refresh());

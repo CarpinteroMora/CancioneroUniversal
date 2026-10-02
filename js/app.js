@@ -4,7 +4,7 @@
 const APP_INFO = {
   nombre: 'Cancionero Universal',
   descripcion: 'Editor de canciones con acordes, transpositor y cancioneros',
-  version: '4.1.1',
+  version: '4.2.0',
   autor: 'Marcos Mora Vitta',
   anio: 2026
 };
@@ -525,6 +525,8 @@ const MENUS = [
     }))
   ]},
   { label: 'Herramientas', items: [
+    { label: 'Grabar…', action: 'record' },
+    { sep: true },
     { label: 'Vincular con audio o video local…', action: 'audioLocal' },
     { label: 'Vincular con audio o video por URL…', action: 'audioUrl' },
     { label: 'Guardar el audio en mi equipo…', action: 'audioSaveExtracted', disabled: () => !currentAudio()?.extractor },
@@ -602,6 +604,7 @@ const ACTIONS = {
   heading: () => toggleLinePrefix('## ', /^\s*#{1,6}\s+/),
   comment: () => toggleLinePrefix('> ', /^\s*>\s?/),
 
+  record: openRecorder,
   audioLocal: linkLocalAudio,
   audioUrl: () => linkUrlAudio(),
   audioSaveExtracted: saveExtractedAudio,
@@ -673,7 +676,7 @@ window.addEventListener('beforeprint', refresh);
 // La sesión queda en el navegador, pero los archivos no: si hay algo sin guardar, el navegador avisa
 window.addEventListener('beforeunload', e => {
   syncFromEditor();
-  if (docs.some(d => !isBlank(d) && isDirty(d)) || bookDirty()) { e.preventDefault(); e.returnValue = ''; }
+  if (docs.some(d => !isBlank(d) && isDirty(d)) || bookDirty() || recorderBusy()) { e.preventDefault(); e.returnValue = ''; }
 });
 
 // ============ INICIO ============

@@ -7,7 +7,9 @@ const VIDEO_EXT = ['mp4', 'm4v', 'webm', 'mov', 'mkv', 'ogv', '3gp', 'avi', 'mpe
 const MEDIA_ACCEPT = 'audio/*,video/*,' + [...AUDIO_EXT, ...VIDEO_EXT].map(e => '.' + e).join(',');
 
 const mediaExt = src => (String(src).split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
-const isVideoSrc = src => VIDEO_EXT.includes(mediaExt(src));
+// Las grabaciones (Herramientas → Grabar) son .webm de solo audio y van en una carpeta «audios»
+const isRecordingSrc = src => mediaExt(src) === 'webm' && /(^|\/)audios?\//i.test(String(src));
+const isVideoSrc = src => VIDEO_EXT.includes(mediaExt(src)) && !isRecordingSrc(src);
 const isMediaFile = f => /^(audio|video)\//.test(f.type) || [...AUDIO_EXT, ...VIDEO_EXT].includes(mediaExt(f.name));
 
 // Páginas de plataformas: no son archivos; su audio se obtiene con el servidor local (extractor.js)

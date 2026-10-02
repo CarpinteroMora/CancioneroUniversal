@@ -2,13 +2,13 @@
 // Cancionero Universal sin conexión: con internet siempre se carga la versión más nueva
 // (y se guarda una copia); sin internet, o si la red tarda, se usa la copia guardada.
 
-const CACHE = 'cancionero-4.1.1';
+const CACHE = 'cancionero-4.2.0';
 const NET_TIMEOUT = 3000;
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/canciotras.css',
   'icons/icono-180.png', 'icons/icono-192.png', 'icons/icono-512.png', 'icons/icono-maskable-512.png',
   ...['acordes', 'markdown', 'ui', 'instrumentos', 'rasgueos', 'render', 'audio', 'extractor', 'youtube', 'hojas',
-    'panel', 'pestanas', 'editor', 'cancionero', 'coleccion', 'nuevo', 'imprimir', 'etiquetas', 'exportar', 'zip', 'oficina',
+    'panel', 'pestanas', 'editor', 'cancionero', 'coleccion', 'grabar', 'nuevo', 'imprimir', 'etiquetas', 'exportar', 'zip', 'oficina',
     'ejemplo', 'guardar', 'colaboradores', 'movil', 'app'].map(n => `js/${n}.js`),
   ...['guitarra', 'ukelele', 'mandolina', 'charango'].map(n => `vendor/acordes/${n}.js`)
 ];

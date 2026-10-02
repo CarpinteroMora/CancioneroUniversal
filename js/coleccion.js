@@ -116,7 +116,7 @@ async function scanCollectionDir(dir, parts, out, depth) {
       if (depth < 6 && !COLLECTION_SKIP_DIRS.has(name.toLowerCase())) await scanCollectionDir(h, [...parts, name], out, depth + 1);
       continue;
     }
-    const kind = /\.(md|markdown)$/i.test(name) ? 'song' : mediaKind(name);
+    const kind = /\.(md|markdown)$/i.test(name) ? 'song' : isRecordingSrc([...parts, name].join('/')) ? 'audio' : mediaKind(name);
     if (!kind) continue;
     try { out.push(await collectionItem(await h.getFile(), kind, h, [...parts, name])); } catch (_) {}
   }

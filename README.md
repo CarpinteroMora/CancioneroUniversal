@@ -37,6 +37,15 @@ solo de cuecas o tonadas. Los tags de las canciones vienen de su .md; los de un 
 los de las canciones que lo usan, el género que traiga el archivo (mp3) y los que le pongas con 🏷️,
 que se guardan en `cancionero-etiquetas.json` dentro de esa carpeta para que viajen con ella.
 
+## Grabar
+
+*Herramientas → Grabar…* abre una grabadora: canta o toca, detén y guarda. La toma queda como `.webm`
+en la carpeta `audios` de tu carpeta de canciones (se puede cambiar) y se vincula a la canción abierta.
+Para que no quede ni muy baja ni reventada, el sonido pasa por un **nivel automático** (sube lo que
+suena bajito y baja lo que suena fuerte; se puede apagar), una ganancia de entrada ajustable y un
+**limitador** que no deja pasar ningún pico de -1 dB. La barra de nivel avisa si el micrófono satura o
+si llega muy bajo. El audio se guarda tal cual: si quieres editarlo, ábrelo con tu propio editor.
+
 ## En el teléfono y la tablet
 
 La app se adapta a la pantalla: menú **☰**, botón **🎼 Tono** que abre las notas en una hoja abajo,
